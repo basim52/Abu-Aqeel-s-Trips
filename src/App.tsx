@@ -399,31 +399,32 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       // Ensure element is ready and scrolled to top
       window.scrollTo(0, 0);
       
-      // Make the element visible but off-screen and relative to body to avoid clipping issues
+      // Temporary styling to ensure visibility for capture context
       const originalStyle = element.style.cssText;
-      element.style.position = 'absolute';
+      element.style.position = 'fixed';
       element.style.left = '0';
       element.style.top = '0';
-      element.style.zIndex = '-9999';
+      element.style.width = '800px';
+      element.style.zIndex = '9999';
       element.style.opacity = '1';
       element.style.visibility = 'visible';
+      element.style.pointerEvents = 'none';
 
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       const canvas = await html2canvas(element, {
-        scale: window.innerWidth < 768 ? 1 : 2, // Scale 1 for mobile to avoid memory crashes
+        scale: window.innerWidth < 768 ? 1.5 : 2, 
         useCORS: true,
         logging: true, 
         backgroundColor: '#ffffff',
-        width: element.scrollWidth,
-        height: element.scrollHeight,
+        width: 800,
         windowWidth: 800,
       });
       
       // Restore original style
       element.style.cssText = originalStyle;
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.82); 
+      const imgData = canvas.toDataURL('image/jpeg', 0.8); 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
