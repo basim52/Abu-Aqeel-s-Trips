@@ -1150,64 +1150,113 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
 
             {activeTab === 'summary' && (
               <>
-                {/* Trip Banner */}
-                <div className="relative h-48 md:h-64 w-full rounded-3xl overflow-hidden shadow-xl mb-8 group">
+                {/* Trip Hero Header */}
+                <div className="relative h-64 md:h-80 w-full rounded-[2.5rem] overflow-hidden shadow-2xl mb-8 group border-4 border-white">
                   <img 
                     src={activeTrip.imageUrl || DEFAULT_TRIP_IMAGES[0]} 
                     alt={activeTrip.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                    crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6 md:p-8">
-                    <div className="flex justify-between items-end">
-                      <div className="text-right">
-                        <h2 className="text-3xl md:text-5xl font-black text-white mb-2">{activeTrip.name}</h2>
-                        <div className="flex items-center gap-4 text-white/80 text-sm md:text-base">
-                          <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {activeTrip.members.length} أعضاء</span>
-                          <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {activeTrip.createdAt?.toDate ? new Date(activeTrip.createdAt.toDate()).toLocaleDateString('ar-EG') : '-'}</span>
+                  {/* Decorative Overlays */}
+                  <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-emerald-950/90 via-emerald-900/40 to-transparent" />
+                  <div className="absolute top-6 left-6 flex gap-2">
+                    <button 
+                      onClick={() => {
+                        setNewTripImage(activeTrip.imageUrl || DEFAULT_TRIP_IMAGES[0]);
+                        setShowImageModal(true);
+                      }} 
+                      className="bg-white/10 hover:bg-white/30 backdrop-blur-xl text-white px-4 py-2 rounded-2xl transition-all border border-white/20 flex items-center gap-2 text-sm font-bold shadow-lg"
+                    >
+                      <Pencil className="w-4 h-4" /> تغيير الغلاف
+                    </button>
+                    <button 
+                      onClick={generatePDF} 
+                      disabled={isGeneratingPDF} 
+                      className="bg-emerald-500/80 hover:bg-emerald-500 backdrop-blur-xl text-white px-4 py-2 rounded-2xl transition-all border border-white/20 flex items-center gap-2 text-sm font-bold shadow-lg"
+                    >
+                      {isGeneratingPDF ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
+                      {isGeneratingPDF ? 'جاري التجهيز...' : 'تقرير سريع'}
+                    </button>
+                  </div>
+
+                  <div className="absolute inset-x-0 bottom-0 p-8 md:p-10">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                      <div className="text-right space-y-2">
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className="px-3 py-1 bg-emerald-400/90 text-emerald-950 text-[10px] font-black rounded-full uppercase tracking-widest shadow-sm">
+                            {activeTrip.members.length} مشارك
+                          </span>
+                          <span className="px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase tracking-widest shadow-sm">
+                             #{activeTrip.id.slice(0, 8)}
+                          </span>
                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => {
-                            setNewTripImage(activeTrip.imageUrl || DEFAULT_TRIP_IMAGES[0]);
-                            setShowImageModal(true);
-                          }} 
-                          className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white p-3 rounded-2xl transition-all border border-white/20"
-                        >
-                          <Pencil className="w-5 h-5" />
-                        </button>
-                        <button onClick={generatePDF} disabled={isGeneratingPDF} className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white p-3 rounded-2xl transition-all border border-white/20">
-                          {isGeneratingPDF ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-5 h-5" />}
-                        </button>
+                        <h2 className="text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-lg tracking-tight">
+                          {activeTrip.name}
+                        </h2>
+                        <div className="flex items-center gap-6 text-emerald-100/90 text-sm md:text-base font-bold">
+                          <span className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5"><Calendar className="w-4 h-4 text-emerald-400" /> {activeTrip.createdAt?.toDate ? new Date(activeTrip.createdAt.toDate()).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</span>
+                          <span className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5"><Share2 className="w-4 h-4 text-emerald-400" /> تمت المشاركة</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="glass-card p-5 border-r-8 border-emerald-600 bg-gradient-to-r from-emerald-50/50 to-white">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">إجمالي الصرف</span>
-                    <span className="text-2xl font-black text-slate-800">{totalSpent} <small className="text-xs font-normal text-slate-400">ريال</small></span>
+                <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                  <div className="glass-card p-6 border-b-[6px] border-emerald-600 bg-white relative overflow-hidden group shadow-lg shadow-emerald-50">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-50 rounded-full group-hover:scale-[2] transition-transform duration-700 opacity-60" />
+                    <div className="flex items-center gap-2 mb-3 relative">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">إجمالي الصرف</span>
+                    </div>
+                    <span className="text-4xl font-black text-slate-900 relative tabular-nums leading-none tracking-tight">
+                      {totalSpent.toLocaleString()} 
+                      <small className="text-xs font-bold text-slate-400 mr-1">ريال</small>
+                    </span>
                   </div>
-                  <div className="glass-card p-5 border-r-8 border-emerald-500 bg-gradient-to-r from-emerald-50/50 to-white cursor-pointer hover:shadow-lg transition-all" onClick={() => setShowBreakdownModal(true)}>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">نصيب الفرد</span>
-                    <span className="text-2xl font-black text-slate-800">{share.toFixed(1)} <small className="text-xs font-normal text-slate-400">ريال</small></span>
+                  <div className="glass-card p-6 border-b-[6px] border-amber-500 bg-white relative overflow-hidden group shadow-lg shadow-amber-50 cursor-pointer hover:-translate-y-1 transition-all" onClick={() => setShowBreakdownModal(true)}>
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-50 rounded-full group-hover:scale-[2] transition-transform duration-700 opacity-60" />
+                    <div className="flex items-center gap-2 mb-3 relative">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">نصيب الشخص</span>
+                    </div>
+                    <span className="text-4xl font-black text-amber-600 relative tabular-nums leading-none tracking-tight">
+                      {share.toLocaleString(undefined, {maximumFractionDigits: 1})} 
+                      <small className="text-xs font-bold text-slate-400 mr-1">ريال/فرد</small>
+                    </span>
                   </div>
-                  <div className="glass-card p-5 border-r-8 border-amber-500 bg-gradient-to-r from-amber-50/50 to-white cursor-pointer hover:shadow-lg transition-all" onClick={() => {
-                    setDepTime(activeTrip.departureTime || '');
-                    setDepLoc(activeTrip.departureLocation || '');
-                    setDepUrl(activeTrip.locationUrl || '');
-                    setShowDepartureModal(true);
-                  }}>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">موعد الانطلاق</span>
-                    <span className="text-lg font-bold truncate block text-slate-800">{activeTrip.departureTime || 'لم يحدد'}</span>
+                  <div className="glass-card p-6 border-b-[6px] border-sky-500 bg-white relative overflow-hidden group shadow-lg shadow-sky-50 cursor-pointer hover:-translate-y-1 transition-all" onClick={() => setShowDepartureModal(true)}>
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-sky-50 rounded-full group-hover:scale-[2] transition-transform duration-700 opacity-60" />
+                    <div className="flex items-center gap-2 mb-3 relative">
+                      <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center text-sky-600">
+                        <Clock className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الانطلاق</span>
+                    </div>
+                    <span className="text-2xl font-black text-sky-700 relative truncate block leading-none py-1">
+                      {activeTrip.departureTime || 'غير محدد'}
+                    </span>
                   </div>
-                  <div className="glass-card p-5 border-r-8 border-rose-500 bg-gradient-to-r from-rose-50/50 to-white relative">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">كود الرحلة</span>
-                    <span className="text-xl font-mono font-bold text-emerald-600 block">{activeTrip.id}</span>
+                  <div className="glass-card p-6 border-b-[6px] border-rose-500 bg-white relative overflow-hidden group shadow-lg shadow-rose-50">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-50 rounded-full group-hover:scale-[2] transition-transform duration-700 opacity-60" />
+                    <div className="flex items-center gap-2 mb-3 relative">
+                      <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600">
+                        <TrendingUp className="w-4 h-4" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الميزانية</span>
+                    </div>
+                    <span className="text-4xl font-black text-rose-600 relative tabular-nums leading-none tracking-tight font-mono">
+                      {activeTrip.budget?.toLocaleString() || '0'} 
+                    </span>
                   </div>
                 </section>
+
                 
                 {/* Budget Section */}
                 <div 
@@ -1267,25 +1316,45 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-6">
                     <section className="space-y-4">
-                      <div className="flex items-center justify-between border-r-4 border-emerald-500 pr-3">
-                        <h3 className="text-xl font-black text-slate-800">تصفية القَطية</h3>
-                        <TrendingUp className="text-emerald-500 w-5 h-5" />
+                      <div className="flex items-center justify-between border-r-8 border-emerald-500 pr-4">
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-800 tracking-tight">إنهاء التصفيات المالية</h3>
+                          <p className="text-slate-400 text-xs font-bold leading-none mt-0.5">تتبع المجموع ومن يحاسب من</p>
+                        </div>
+                        <TrendingUp className="text-emerald-500 w-6 h-6" />
                       </div>
-                      <div className="glass-card divide-y divide-slate-50 border-t-4 border-emerald-500">
+                      <div className="glass-card divide-y-2 divide-slate-50 border-t-8 border-emerald-500 bg-white shadow-xl shadow-emerald-50/50">
                         {settlements.length === 0 ? (
-                          <div className="p-10 text-center text-slate-400">لا توجد مبالغ مستحقة حالياً</div>
+                          <div className="p-16 text-center text-slate-400">
+                             <CheckCircle2 className="w-12 h-12 text-emerald-100 mx-auto mb-3" />
+                             <p className="font-bold text-lg">لا توجد مبالغ مستحقة حالياً</p>
+                          </div>
                         ) : (
                           settlements.map((s, idx) => (
-                            <div key={idx} className="p-5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <span className="font-bold text-slate-700">{s.from}</span>
-                                <ArrowRight className="w-4 h-4 text-emerald-300" />
-                                <span className="font-bold text-emerald-600">{s.to}</span>
+                            <div key={idx} className="p-6 flex items-center justify-between hover:bg-emerald-50/30 transition-all group">
+                              <div className="flex items-center gap-5">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-600 text-sm shadow-inner group-hover:bg-white transition-colors">{s.from[0]}</div>
+                                  <span className="font-black text-xl text-slate-800">{s.from}</span>
+                                </div>
+                                <div className="bg-emerald-50 p-2 rounded-full border border-emerald-100">
+                                  <ArrowRight className="w-4 h-4 text-emerald-500" />
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center font-black text-white text-sm shadow-md group-hover:scale-110 transition-transform">{s.to[0]}</div>
+                                  <span className="font-black text-xl text-emerald-700">{s.to}</span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-4">
-                                <span className="font-black text-lg text-emerald-600">{s.amount} <small className="text-[10px] font-normal uppercase">ريال</small></span>
-                                <button onClick={() => shareSettlement(s)} className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all">
-                                  <MessageCircle className="w-5 h-5" />
+                              <div className="flex items-center gap-6">
+                                <span className="font-black text-3xl text-emerald-600 tabular-nums">
+                                  {s.amount.toLocaleString()} 
+                                  <small className="text-xs font-bold text-slate-400 mr-1 leading-none">ريال</small>
+                                </span>
+                                <button 
+                                  onClick={() => shareSettlement(s)} 
+                                  className="w-12 h-12 bg-white text-emerald-600 rounded-2xl hover:bg-emerald-600 hover:text-white border-2 border-emerald-50 shadow-md transition-all flex items-center justify-center group-active:scale-90"
+                                >
+                                  <MessageCircle className="w-6 h-6" />
                                 </button>
                               </div>
                             </div>
@@ -1293,6 +1362,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                         )}
                       </div>
                     </section>
+
 
                     <section className="space-y-4">
                       <div className="flex items-center justify-between">
@@ -1401,140 +1471,180 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
             )}
 
             {activeTab === 'expenses' && (
-              <div className="space-y-6">
-                <button onClick={() => setShowAddExpenseModal(true)} className="w-full p-5 btn-primary text-xl flex items-center justify-center gap-3">
-                  <Plus className="w-6 h-6 bg-white/20 rounded-lg p-1" /> إضافة مصروف جديد
+              <div className="space-y-8">
+                <button 
+                  onClick={() => setShowAddExpenseModal(true)} 
+                  className="w-full p-6 bg-emerald-600 text-white text-2xl font-black rounded-[2rem] shadow-xl shadow-emerald-100 flex items-center justify-center gap-4 hover:bg-emerald-700 active:scale-95 transition-all group"
+                >
+                  <div className="bg-white/20 rounded-2xl p-2 group-hover:scale-110 transition-transform">
+                    <Plus className="w-8 h-8" />
+                  </div>
+                  إضافة مصروف جديد للرحلة
                 </button>
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold">سجل المصروفات</h3>
-                  {expenses.length > 0 && (
-                    <button 
-                      onClick={exportExpensesPDF} 
-                      className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl flex items-center gap-2 hover:bg-emerald-100 transition-all text-sm"
-                    >
-                      <Download className="w-4 h-4" /> تصدير PDF
-                    </button>
-                  )}
-                </div>
-                  <div className="space-y-3">
+
+                <section className="space-y-6">
+                  <div className="flex items-center justify-between border-r-8 border-emerald-600 pr-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-800">سجل مصروفات الرحلة</h3>
+                      <p className="text-slate-400 text-sm font-bold">إدارة وتتبع كافة التكاليف والمشتريات</p>
+                    </div>
+                    {expenses.length > 0 && (
+                      <button 
+                        onClick={exportExpensesPDF} 
+                        className="text-emerald-600 font-black px-6 py-3 bg-white border border-emerald-100 rounded-2xl flex items-center gap-2 hover:bg-emerald-50 transition-all shadow-sm"
+                      >
+                        <Download className="w-5 h-5" /> تصدير السجل
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
                     {expenses.map(e => (
-                      <div key={e.id} className="glass-card p-5 flex items-center justify-between border-r-4 border-emerald-600">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
-                            {e.category === 'food' && <Utensils className="w-5 h-5" />}
-                            {e.category === 'fuel' && <Fuel className="w-5 h-5" />}
-                            {e.category === 'supplies' && <Package className="w-5 h-5" />}
-                            {e.category === 'other' || !e.category ? <ShoppingBag className="w-5 h-5" /> : null}
+                      <div key={e.id} className="glass-card p-6 flex items-center justify-between border-l-8 border-emerald-500 bg-white hover:shadow-xl transition-all group">
+                        <div className="flex items-center gap-6">
+                          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-inner ${
+                            e.category === 'food' ? 'bg-amber-50 text-amber-600' : 
+                            e.category === 'fuel' ? 'bg-sky-50 text-sky-600' : 
+                            e.category === 'supplies' ? 'bg-emerald-50 text-emerald-600' : 
+                            'bg-slate-50 text-slate-600'
+                          }`}>
+                            {e.category === 'food' && <Utensils className="w-8 h-8" />}
+                            {e.category === 'fuel' && <Fuel className="w-8 h-8" />}
+                            {e.category === 'supplies' && <Package className="w-8 h-8" />}
+                            {e.category === 'other' || !e.category ? <ShoppingBag className="w-8 h-8" /> : null}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-800">{e.description}</p>
-                            <p className="text-xs text-slate-400 font-bold">بواسطة {e.paidBy}</p>
+                            <p className="font-black text-2xl text-slate-800 leading-tight mb-1">{e.description}</p>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-black text-slate-400 px-3 py-1 bg-slate-50 rounded-full border border-slate-100">
+                                بواسطة: {e.paidBy}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{new Date().toLocaleDateString('ar-EG')}</span>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-8">
                           <div className="text-left">
-                            <span className="text-lg font-black text-slate-800">{e.amount}</span>
-                            <span className="text-[10px] text-slate-400 block uppercase">ريال</span>
+                            <span className="text-3xl font-black text-slate-900 tabular-nums">{e.amount.toLocaleString()}</span>
+                            <span className="text-[10px] text-slate-400 block font-black uppercase tracking-widest pr-1">ريال</span>
                           </div>
-                          <div className="flex flex-col gap-1">
+                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => startEditExpense(e)} 
-                              className="p-2 text-slate-200 hover:text-emerald-500 transition-colors"
+                              className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="w-5 h-5" />
                             </button>
                             <button 
                               onClick={() => deleteExpense(e.id)} 
-                              className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
+                              className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-5 h-5" />
                             </button>
                           </div>
                         </div>
                       </div>
                     ))}
-                    {expenses.length === 0 && <div className="p-10 text-center text-slate-400 italic">لا توجد مصروفات مسجلة حالياً</div>}
+                    {expenses.length === 0 && (
+                      <div className="p-20 text-center glass-card border-dashed border-2 border-slate-200">
+                        <ShoppingBag className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold text-xl tracking-wide">لا توجد مصروفات مسجلة لهذه الرحلة</p>
+                      </div>
+                    )}
                   </div>
                 </section>
               </div>
             )}
 
             {activeTab === 'gear' && (
-              <div className="space-y-6">
-                <div className="glass-card p-6 space-y-4">
+              <div className="space-y-8">
+                <div className="glass-card p-8 space-y-6 bg-white shadow-xl shadow-slate-100 border-t-8 border-amber-500">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold">تجهيز مهام اعضاء الرحلة (الأدوات)</h3>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-800">تجهيز مستلزمات العزبة</h3>
+                      <p className="text-slate-400 text-sm font-bold">تحديد المسؤوليات وتوفير الأدوات اللازمة</p>
+                    </div>
                     {gear.length > 0 && (
                       <button 
                         onClick={exportGearPDF} 
-                        className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl flex items-center gap-2 hover:bg-emerald-100 transition-all text-sm"
+                        className="text-amber-600 font-black px-6 py-3 bg-white border border-amber-100 rounded-2xl flex items-center gap-2 hover:bg-amber-50 transition-all shadow-sm"
                       >
-                        <Download className="w-4 h-4" /> تصدير PDF
+                        <Download className="w-5 h-5" /> تصدير PDF
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input type="text" placeholder="مثلاً: خيمة، موقد.." className="flex-1 border p-3 rounded-xl" value={newGearName} onChange={e => setNewGearName(e.target.value)} />
-                    <select className="border p-3 rounded-xl" value={newGearProvider} onChange={e => setNewGearProvider(e.target.value)}>
-                      <option value="">من الموفر؟</option>
-                      {activeTrip.members.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <div className="flex gap-2">
-                      <button onClick={addGearItem} className={`${editingGearId ? 'bg-amber-600' : 'bg-emerald-600'} text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 flex-1`}>
-                        {editingGearId ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                        {editingGearId ? 'تعديل المهمة' : 'إضافة للمهمة'}
-                      </button>
-                      {editingGearId && (
-                        <button 
-                          onClick={() => {
-                            setEditingGearId(null);
-                            setNewGearName('');
-                            setNewGearProvider('');
-                          }} 
-                          className="bg-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold"
-                        >
-                          إلغاء
-                        </button>
-                      )}
+                  
+                  <div className="flex flex-col lg:flex-row gap-4 p-4 bg-slate-50 rounded-[2rem] border border-slate-100">
+                    <div className="relative flex-1 group">
+                      <Package className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
+                      <input 
+                        type="text" 
+                        placeholder="ماذا نحتاج؟ (مثلاً: خيمة، موقد..)" 
+                        className="w-full bg-white border-2 border-transparent focus:border-amber-500 p-4 pr-12 rounded-2xl transition-all outline-none font-bold" 
+                        value={newGearName} 
+                        onChange={e => setNewGearName(e.target.value)} 
+                      />
                     </div>
+                    <div className="relative min-w-[200px]">
+                      <Users className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <select 
+                        className="w-full bg-white border-2 border-transparent focus:border-amber-500 p-4 pr-12 rounded-2xl transition-all outline-none font-bold appearance-none" 
+                        value={newGearProvider} 
+                        onChange={e => setNewGearProvider(e.target.value)}
+                      >
+                        <option value="">موفر الأداة؟</option>
+                        {activeTrip.members.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <button 
+                      onClick={addGearItem} 
+                      className={`px-8 py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all shadow-lg active:scale-95 ${
+                        editingGearId ? 'bg-amber-600 text-white shadow-amber-200 hover:bg-amber-700' : 'bg-slate-900 text-white shadow-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      {editingGearId ? <Pencil className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+                      {editingGearId ? 'تحديث المهمة' : 'إضافة للرحلة'}
+                    </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {gear.map(item => (
-                    <div key={item.id} className={`glass-card p-5 flex items-center justify-between border-r-4 ${item.status === 'available' ? 'border-emerald-500 bg-emerald-50/30' : 'border-amber-500'}`}>
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => toggleGear(item)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${item.status === 'available' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                          <Package className="w-5 h-5" />
+                    <div key={item.id} className={`glass-card p-6 flex items-center justify-between border-r-8 transition-all group hover:scale-[1.02] ${
+                      item.status === 'available' ? 'border-emerald-500 bg-emerald-50/20' : 'border-amber-500 bg-white'
+                    }`}>
+                      <div className="flex items-center gap-5">
+                        <button 
+                          onClick={() => toggleGear(item)} 
+                          className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-md group-active:scale-90 ${
+                            item.status === 'available' ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-white text-slate-300 border-2 border-slate-100 hover:border-amber-300 hover:text-amber-500'
+                          }`}
+                        >
+                          {item.status === 'available' ? <CheckCircle2 className="w-8 h-8" /> : <Package className="w-8 h-8" />}
                         </button>
                         <div>
-                          <p className={`font-bold ${item.status === 'available' ? 'text-emerald-900' : 'text-slate-800'}`}>{item.name}</p>
-                          <p className="text-xs text-slate-500">من طرف: {item.provider || 'الجميع'}</p>
+                          <p className={`font-black text-2xl leading-tight ${item.status === 'available' ? 'text-emerald-900 line-through opacity-60' : 'text-slate-800'}`}>
+                            {item.name}
+                          </p>
+                          <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${item.status === 'available' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            بواسطة: {item.provider || 'الجميع'}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${item.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {item.status === 'available' ? 'جاهز' : 'نحتاجه'}
-                        </span>
-                        <div className="flex flex-col gap-1">
-                          <button 
-                            onClick={() => startEditGear(item)} 
-                            className="p-2 text-slate-200 hover:text-emerald-500 transition-colors"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => deleteGearItem(item.id)} 
-                            className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => startEditGear(item)} className="p-2 text-slate-300 hover:text-amber-500 bg-slate-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => deleteGearItem(item.id)} className="p-2 text-slate-300 hover:text-rose-500 bg-slate-50 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
                         </div>
                       </div>
                     </div>
                   ))}
-                  {gear.length === 0 && <div className="sm:col-span-2 p-10 text-center text-slate-400 italic">لم يتم إضافة أدوات بعد</div>}
+                  {gear.length === 0 && (
+                    <div className="md:col-span-2 p-20 text-center glass-card border-dashed border-2 border-slate-200">
+                      <Backpack className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                      <p className="text-slate-400 font-bold text-xl tracking-wide">لم يتم تحديد مستلزمات للرحلة بعد</p>
+                    </div>
+                  )}
                 </div>
 
                 <section className="space-y-4">
@@ -2181,7 +2291,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
         </div>
       </div>
 
-      {/* Hidden Report Template for PDF Export */}
+      {/* Professional Trip Report Document (PDF Export) */}
       <div 
         ref={reportRef} 
         style={{ 
@@ -2190,184 +2300,211 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
           top: 0,
           width: '800px', 
           backgroundColor: 'white', 
-          color: '#1e293b',
+          color: '#0f172a',
           zIndex: -1000,
         }}
-        className="rtl p-10"
+        className="rtl p-14"
         dir="rtl"
       >
-        <div className="border-b-8 border-emerald-600 pb-10 mb-10 flex justify-between items-center">
-          <div className="space-y-4">
-            <h1 className="text-5xl font-black text-emerald-900 mb-2">تقرير الرحلة النهائي</h1>
-            <div className="bg-emerald-100 text-emerald-800 px-6 py-2 rounded-full text-2xl font-bold inline-block">
+        {/* Formal Header */}
+        <div className="border-b-[16px] border-emerald-600 pb-10 mb-12 flex justify-between items-start">
+          <div className="space-y-4 text-right">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-16 h-16 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                <MapPin className="text-white w-9 h-9" />
+              </div>
+              <div>
+                <h1 className="text-5xl font-black text-emerald-950 tracking-tighter leading-none mb-2">تقرير الرحلة النهائي</h1>
+                <p className="text-slate-400 font-bold tracking-widest text-sm uppercase">Official Trip Summary Document</p>
+              </div>
+            </div>
+            <div className="bg-emerald-50 border-2 border-emerald-100 text-emerald-900 px-8 py-4 rounded-[2rem] text-3xl font-black inline-block shadow-lg mt-4">
               {activeTrip?.name}
             </div>
-            {activeTrip?.imageUrl && (
-              <div className="w-full h-40 rounded-3xl overflow-hidden mt-4 border-2 border-emerald-100">
-                <img src={activeTrip.imageUrl} alt="Trip cover" className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
-              </div>
-            )}
           </div>
-          <div className="text-left font-mono">
-            <p className="text-slate-400 text-sm mb-1 uppercase tracking-widest">TRIP ID</p>
-            <p className="font-bold text-2xl text-emerald-800 mb-4">#{activeTrip?.id}</p>
-            <p className="text-slate-400 text-sm mb-1 uppercase tracking-widest">DATE</p>
-            <p className="font-bold text-slate-800 italic">{new Date().toLocaleDateString('ar-SA')}</p>
+          <div className="text-left space-y-4">
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 shadow-sm text-center min-w-[160px]">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">الرقم المرجعي</p>
+              <p className="font-mono font-black text-xl text-emerald-600">#{activeTrip?.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 shadow-sm text-center min-w-[160px]">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">تاريخ التقرير</p>
+              <p className="font-black text-xl text-slate-800">{new Date().toLocaleDateString('ar-SA')}</p>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-8 mb-8">
-          <div className="bg-emerald-50/50 p-8 rounded-[2.5rem] border-2 border-emerald-100 text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-200/50 rounded-full -mr-6 -mt-6" />
-            <p className="text-sm font-bold text-emerald-600 uppercase mb-2">إجمالي المصروفات</p>
-            <p className="text-4xl font-black text-emerald-900">{totalSpent} <span className="text-base font-bold">ريال</span></p>
+        {/* Dashboard Stat Cards */}
+        <div className="grid grid-cols-3 gap-8 mb-12">
+          <div className="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12" />
+            <p className="text-emerald-100 text-xs font-black uppercase mb-3 tracking-widest">إجمالي المصروفات</p>
+            <p className="text-4xl font-black">{totalSpent.toLocaleString()} <small className="text-base font-normal opacity-70">ريال</small></p>
           </div>
-          <div className="bg-amber-50/50 p-8 rounded-[2.5rem] border-2 border-amber-100 text-center relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-12 h-12 bg-amber-200/50 rounded-full -mr-6 -mt-6" />
-            <p className="text-sm font-bold text-amber-600 uppercase mb-2">عدد الأعضاء</p>
-            <p className="text-4xl font-black text-amber-900">{activeTrip?.members.length} <span className="text-base font-bold">أشخاص</span></p>
+          <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -mr-12 -mt-12" />
+            <p className="text-slate-500 text-xs font-black uppercase mb-3 tracking-widest">نصيب الشخص</p>
+            <p className="text-4xl font-black text-emerald-400">{share.toLocaleString(undefined, {maximumFractionDigits: 1})} <small className="text-base font-normal opacity-70">ريال</small></p>
           </div>
-          <div className="bg-indigo-50/50 p-8 rounded-[2.5rem] border-2 border-indigo-100 text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-12 h-12 bg-indigo-200/50 rounded-full -mr-6 -mt-6" />
-            <p className="text-sm font-bold text-indigo-600 uppercase mb-2">نصيب الشخص</p>
-            <p className="text-4xl font-black text-indigo-900">{share.toFixed(2)} <span className="text-base font-bold">ريال</span></p>
+          <div className="bg-white p-8 rounded-[2.5rem] text-slate-800 shadow-lg border-2 border-slate-50 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12" />
+            <p className="text-slate-400 text-xs font-black uppercase mb-3 tracking-widest">عدد المشاركين</p>
+            <p className="text-4xl font-black">{activeTrip?.members.length} <small className="text-base font-normal opacity-70">أعضاء</small></p>
           </div>
         </div>
 
-        {activeTrip?.budget && activeTrip.budget > 0 && (
-          <div className="bg-slate-50 p-8 rounded-[2.5rem] border-2 border-slate-200 mb-12 flex justify-between items-center">
-            <div className="flex-1">
-              <div className="flex justify-between items-end mb-3">
-                <p className="text-sm font-bold text-slate-500 uppercase">مؤشر استهلاك الميزانية ({activeTrip.budget} ريال)</p>
-                <p className={`text-lg font-black ${totalSpent > activeTrip.budget ? 'text-rose-600' : 'text-emerald-600'}`}>
-                  {((totalSpent / activeTrip.budget) * 100).toFixed(1)}%
-                </p>
-              </div>
-              <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                   className={`h-full ${totalSpent > activeTrip.budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                  style={{ width: `${Math.min((totalSpent / activeTrip.budget) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-            <div className="mr-8 text-left">
-              <p className="text-xs font-bold text-slate-400 uppercase mb-1">الحالة المالية</p>
-              <p className={`text-xl font-black ${totalSpent > activeTrip.budget ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {totalSpent > activeTrip.budget ? 'تعدى الميزانية' : 'تحت الميزانية'}
-              </p>
-            </div>
-          </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-10 mb-12">
-          <div>
-            <h2 className="text-2xl font-black mb-6 flex items-center gap-3">
-              <span className="w-2 h-8 bg-emerald-500 rounded-full" />
-              سجل المصروفات
-            </h2>
-            <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+        {/* Detailed Financial & Member Sections */}
+        <div className="space-y-12">
+          <div className="section-block">
+            <div className="flex items-center justify-between mb-6 pr-4 border-r-8 border-emerald-600">
+              <h3 className="text-2xl font-black text-slate-800">تفاصيل تصفية القَطية المالية</h3>
+              <div className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-tighter">Settlement Ledger</div>
+            </div>
+            <div className="border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm bg-white">
               <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-sm">
-                    <th className="p-4 border-b">الوصف</th>
-                    <th className="p-4 border-b">المبلغ</th>
-                    <th className="p-4 border-b text-left">الدافع</th>
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-6 text-slate-500 text-xs font-black uppercase tracking-widest">من العضو</th>
+                    <th className="p-6 text-center text-slate-500 text-xs font-black uppercase tracking-widest">إلى العضو</th>
+                    <th className="p-6 text-left text-slate-500 text-xs font-black uppercase tracking-widest">المبلغ المستحق</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {expenses.map((e, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                      <td className="p-4 border-b font-bold text-slate-700">{e.description}</td>
-                      <td className="p-4 border-b text-emerald-600 font-bold">{e.amount} ريال</td>
-                      <td className="p-4 border-b text-left text-slate-500 font-medium">{e.paidBy}</td>
+                <tbody className="divide-y divide-slate-50">
+                  {settlements.map((s, idx) => (
+                    <tr key={idx} className="hover:bg-emerald-50/30 transition-colors">
+                      <td className="p-6 font-black text-slate-800 text-xl">{s.from}</td>
+                      <td className="p-6 text-center">
+                        <span className="inline-flex items-center gap-3 px-5 py-2 bg-emerald-100/50 text-emerald-900 rounded-full text-xs font-black">
+                          {s.to} <ArrowLeft className="w-4 h-4 text-emerald-600" />
+                        </span>
+                      </td>
+                      <td className="p-6 text-left font-black text-emerald-600 text-3xl tabular-nums">{s.amount.toLocaleString()} <small className="text-xs font-normal">ريال</small></td>
                     </tr>
                   ))}
+                  {settlements.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-16 text-center text-slate-400 font-bold text-lg italic tracking-wide">
+                        تمت تصفية كافة المبالغ المالية بين الأعضاء بنجاح تام.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div>
-            <h2 className="text-2xl font-black mb-6 flex items-center gap-3">
-              <span className="w-2 h-8 bg-amber-500 rounded-full" />
-              صافي المستحقات (التصفيات)
-            </h2>
-            <div className="space-y-4">
-              {settlements.map((s, i) => (
-                <div key={i} className="flex justify-between items-center p-5 bg-white rounded-3xl border-2 border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-600">{s.from[0]}</div>
-                    <ArrowRight className="w-4 h-4 text-slate-300" />
-                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center font-bold text-emerald-600">{s.to[0]}</div>
-                    <div className="mr-2">
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">تحويل من {s.from}</p>
-                       <p className="font-bold text-slate-800">إلى {s.to}</p>
+          <div className="section-block">
+            <div className="flex items-center justify-between mb-6 pr-4 border-r-8 border-emerald-600">
+              <h3 className="text-2xl font-black text-slate-800">بيانات مساهمة الأعضاء</h3>
+              <div className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-tighter">Vault Contribution</div>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              {activeTrip?.members.map(member => {
+                const committed = activeTrip.memberCommitments?.[member] || 0;
+                const paid = contributions.filter(c => c.memberName === member).reduce((sum, c) => sum + c.amount, 0);
+                const remaining = committed - paid;
+                return (
+                  <div key={member} className="p-8 bg-slate-50/50 rounded-[2rem] border border-slate-100 flex justify-between items-center shadow-sm">
+                    <div className="space-y-1">
+                      <p className="font-black text-2xl text-slate-800 leading-none">{member}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-0.5">التزام: {committed} ريال</p>
+                    </div>
+                    <div className="text-left space-y-2">
+                      <p className="text-3xl font-black text-emerald-600 leading-none">{paid} ريال</p>
+                      <div className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] inline-block ${remaining <= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                        {remaining <= 0 ? 'سداد كامل' : `متبقي: ${remaining}`}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-xl font-black text-emerald-600 bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100">
-                    {s.amount} <small className="text-xs">ريال</small>
-                  </div>
-                </div>
-              ))}
-              {settlements.length === 0 && (
-                <div className="p-10 text-center text-slate-400 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                  لا توجد تصفيات مالية معلقة
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
         </div>
 
-        <div className="mt-auto pt-10 border-t-2 border-slate-100 flex justify-between items-center opacity-60">
-           <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
-                <Calculator className="text-white w-6 h-6" />
-              </div>
-              <div>
-                <p className="font-black text-emerald-900">نظام رحلة أبو عقيل</p>
-                <p className="text-xs font-bold text-slate-500 tracking-widest uppercase">Trip Manager Pro</p>
-              </div>
-           </div>
-           <div className="text-left font-bold text-slate-400 italic text-sm">
-              صدر عبر التطبيق الذكي لإدارة الرحلات والمصاريف
-           </div>
+        {/* Branding Footer */}
+        <div className="mt-32 pt-10 border-t-4 border-slate-100 text-center space-y-4">
+          <p className="text-slate-400 font-bold text-lg">تحية طيبة • رفيقك في السفر "خوي السفر"</p>
+          <div className="flex justify-center items-center gap-6 text-emerald-600/40 text-[9px] font-black uppercase tracking-[0.5em]">
+            <span>OFFICIAL SYSTEM RECORD</span>
+            <div className="w-1.5 h-1.5 bg-emerald-300 rounded-full" />
+            <span>TIMESTAMP: {new Date().getTime()}</span>
+            <div className="w-1.5 h-1.5 bg-emerald-300 rounded-full" />
+            <span>ENCRYPTED AIS-CLOUD-V2</span>
+          </div>
         </div>
       </div>
 
-      {/* Hidden Gear Report */}
+      {/* Professional Member Tasks Report (PDF Export) */}
       <div 
         ref={gearPrintRef} 
-        style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
-        className="rtl"
+        style={{ 
+          position: 'fixed', 
+          left: '-5000px', 
+          top: 0, 
+          width: '800px', 
+          backgroundColor: 'white', 
+          color: '#0f172a', 
+          zIndex: -1000 
+        }}
+        className="rtl p-14"
         dir="rtl"
       >
-        <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex justify-between items-end">
-          <h2 className="text-3xl font-black text-emerald-900">قائمة مهام أعضاء الرحلة</h2>
-          <p className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-xl text-sm font-bold">{activeTrip?.name}</p>
+        <div className="border-b-[16px] border-amber-500 pb-10 mb-12 flex justify-between items-start">
+          <div className="space-y-4 text-right">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-16 h-16 bg-amber-500 rounded-3xl flex items-center justify-center shadow-2xl">
+                <Package className="text-white w-9 h-9" />
+              </div>
+              <div>
+                <h2 className="text-5xl font-black text-slate-900 tracking-tighter leading-none mb-2">قائمة مهام العزبة</h2>
+                <p className="text-slate-400 font-bold tracking-widest text-sm uppercase">Equipment & Tasks Responsibility</p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border-2 border-amber-100 text-amber-900 px-8 py-4 rounded-[2rem] text-3xl font-black inline-block shadow-lg mt-4">
+              {activeTrip?.name}
+            </div>
+          </div>
+          <div className="text-left font-black text-slate-300 italic text-sm pt-4">
+            نظام خوي السفر لإدارة الرحلات
+          </div>
         </div>
-        <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+
+        <div className="border-2 border-slate-100 rounded-[2.5rem] overflow-hidden shadow-xl bg-white mb-12">
           <table className="w-full text-right border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-sm">
-                <th className="p-4 border-b">الحالة</th>
-                <th className="p-4 border-b">المهمة/الأداة</th>
-                <th className="p-4 border-b">الموفر/المسؤول</th>
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="p-6 text-slate-500 text-xs font-black uppercase tracking-widest bg-slate-100/50">الحالة</th>
+                <th className="p-6 text-slate-500 text-xs font-black uppercase tracking-widest">المهمة / الأداة</th>
+                <th className="p-6 text-left text-slate-500 text-xs font-black uppercase tracking-widest">المسؤول عن توفيرها</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-50">
               {gear.map((item, i) => (
-                <tr key={i} className="border-b border-slate-50">
-                  <td className="p-4 text-sm font-bold">
-                    <span className={item.status === 'available' ? 'text-emerald-600' : 'text-amber-600'}>
-                      {item.status === 'available' ? '✅ جاهز' : '⏳ نحتاجه'}
+                <tr key={i} className="hover:bg-amber-50/30 transition-colors">
+                  <td className="p-6">
+                    <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${item.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {item.status === 'available' ? 'مكتمل ✅' : 'قيد التوفير ⏳'}
                     </span>
                   </td>
-                  <td className="p-4 font-bold text-slate-800">{item.name}</td>
-                  <td className="p-4 text-slate-500">{item.provider || 'الجميع'}</td>
+                  <td className="p-6 font-black text-xl text-slate-800">{item.name}</td>
+                  <td className="p-6 text-left text-slate-500 font-bold text-lg">{item.provider || 'مسؤولية الجميع'}</td>
                 </tr>
               ))}
+              {gear.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="p-16 text-center text-slate-400 font-bold text-lg italic">
+                    لم يتم إضافة أي مهام أو أدوات لهذه الرحلة حتى الآن.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-20 text-center opacity-40">
+          <p className="text-slate-400 font-black text-[8px] uppercase tracking-[0.5em]">Travel Pal - Responsibility & Logistics Report</p>
         </div>
       </div>
 
