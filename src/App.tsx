@@ -475,69 +475,68 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     
     setIsGeneratingPDF(true);
     try {
-      // 1. Prepare for capture: Create a dedicated capture container
-      const captureContainer = document.createElement('div');
-      captureContainer.style.position = 'fixed';
-      captureContainer.style.left = '-10000px'; 
-      captureContainer.style.top = '0';
-      captureContainer.style.width = '1200px'; 
-      captureContainer.style.backgroundColor = '#ffffff';
-      captureContainer.style.direction = 'rtl'; // Maintain RTL for Arabic
-      document.body.appendChild(captureContainer);
-
-      // Clone the element and clean it up for printing
-      const element = originalElement.cloneNode(true) as HTMLElement;
-      element.style.display = 'block';
-      element.style.visibility = 'visible';
-      element.style.opacity = '1';
-      element.style.position = 'relative';
-      element.style.width = '100%';
-      element.style.margin = '0';
-      element.style.padding = '50px';
+      const printId = originalElement.getAttribute('data-print-id') || 'print-target';
       
-      captureContainer.appendChild(element);
-
-      // Wait for layout and fonts
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const canvas = await html2canvas(element, {
-        scale: 2,
+      const canvas = await html2canvas(originalElement, {
+        scale: 1.5,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
         onclone: (clonedDoc) => {
-          // Replace modern Tailwind 4 colors (oklch) that canvas engines can't parse
+          // 1. Target the specific element in the clone
+          const target = clonedDoc.querySelector(`[data-print-id="${printId}"]`) as HTMLElement;
+          if (target) {
+            target.style.position = 'relative';
+            target.style.left = '0';
+            target.style.top = '0';
+            target.style.zIndex = '1';
+            target.style.visibility = 'visible';
+            target.style.display = 'block';
+            target.style.opacity = '1';
+          }
+
+          // 2. Multi-stage color sanitization for Tailwind 4
+          const allElements = clonedDoc.getElementsByTagName('*');
+          for (let i = 0; i < allElements.length; i++) {
+            const el = allElements[i] as HTMLElement;
+            // Sanitizing inline styles
+            if (el.style && el.style.cssText && el.style.cssText.includes('oklch')) {
+              el.style.cssText = el.style.cssText.replace(/oklch\([^)]+\)/g, '#777777');
+            }
+          }
+
+          // Replacing variables and rules in style tags
           const styleTags = clonedDoc.getElementsByTagName('style');
           for (let i = 0; i < styleTags.length; i++) {
-            styleTags[i].innerHTML = styleTags[i].innerHTML.replace(/oklch\([^)]+\)/g, (match) => {
-              if (match.includes('96.27% 0.01 224.43')) return '#ecfdf5'; // emerald-50
-              if (match.includes('51.97% 0.17 162.7')) return '#059669'; // emerald-600
-              if (match.includes('64.44% 0.19 86.84')) return '#f59e0b'; // amber-500
-              if (match.includes('92.38% 0.03 89.26')) return '#fffbeb'; // amber-50
-              if (match.includes('0% 0 0')) return '#000000'; // black
-              if (match.includes('100% 0 0')) return '#ffffff'; // white
-              if (match.includes('43.14% 0.13 162.7')) return '#047857'; // emerald-700
-              return '#666666'; // general fallback
-            });
+            try {
+              styleTags[i].innerHTML = styleTags[i].innerHTML.replace(/oklch\([^)]+\)/g, (match) => {
+                if (match.includes('96.27% 0.01 224.43')) return '#ecfdf5'; // emerald-50
+                if (match.includes('51.97% 0.17 162.7')) return '#059669'; // emerald-600
+                if (match.includes('64.44% 0.19 86.84')) return '#f59e0b'; // amber-500
+                if (match.includes('92.38% 0.03 89.26')) return '#fffbeb'; // amber-50
+                if (match.includes('100% 0 0')) return '#ffffff'; // white
+                if (match.includes('0% 0 0')) return '#000000'; // black
+                return '#777777'; 
+              });
+            } catch (e) { /* ignore read-only style tags failing in some browsers */ }
           }
         }
       });
 
-      // Cleanup capture container
-      document.body.removeChild(captureContainer);
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      
+      if (!imgData || imgData === 'data:,' || imgData.length < 2000) {
+        throw new Error('فشل التقاط محتوى الصفحة - المحتوى فارغ');
+      }
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-      
-      // Save directly to device
       pdf.save(filename);
 
-      // Share via Web Share if possible
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
@@ -561,7 +560,7 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       
     } catch (err: any) {
       console.error('PDF Export Error:', err);
-      alert(`حدث خطأ أثناء تصدير الملف: ${err.message || 'خطأ فني'}`);
+      alert(`عذراً، حدث خطأ أثناء التصدير: ${err.message || 'يرجى المحاولة مجدداً'}`);
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -2289,6 +2288,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Professional Trip Report Document (PDF Export) */}
       <div 
         ref={reportRef} 
+        data-print-id="report-target"
         style={{ 
           position: 'fixed',
           left: '-5000px',
@@ -2434,6 +2434,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Professional Member Tasks Report (PDF Export) */}
       <div 
         ref={gearPrintRef} 
+        data-print-id="gear-target"
         style={{ 
           position: 'fixed', 
           left: '-5000px', 
@@ -2506,6 +2507,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Hidden Expenses Report */}
       <div 
         ref={expensesPrintRef} 
+        data-print-id="expenses-target"
         style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
         className="rtl"
         dir="rtl"
@@ -2543,6 +2545,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Hidden Prep Tasks Report */}
       <div 
         ref={tasksPrintRef} 
+        data-print-id="tasks-target"
         style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
         className="rtl"
         dir="rtl"
