@@ -9,6 +9,7 @@
         "budget": { "type": "number", "description": "Estimated total budget." },
         "members": { "type": "array", "description": "List of participant names." },
         "memberCommitments": { "type": "object", "additionalProperties": { "type": "number" }, "description": "Mapping of member name to committed amount." },
+        "memberPhones": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Mapping of member name to WhatsApp phone number." },
         "departureTime": { "type": "string", "description": "Time/Date of departure." },
         "departureLocation": { "type": "string", "description": "Location of departure." },
         "locationUrl": { "type": "string", "description": "URL link to the departure location (e.g. Google Maps)." },
@@ -37,9 +38,42 @@
         "description": { "type": "string", "description": "What was the expense for?" },
         "amount": { "type": "number", "description": "The cost of the expense." },
         "paidBy": { "type": "string", "description": "Name of the member who paid." },
+        "category": { "type": "string", "enum": ["food", "fuel", "supplies", "other"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["description", "amount", "paidBy"]
+      "required": ["description", "amount", "paidBy", "category"]
+    },
+    "GearItem": {
+      "title": "GearItem",
+      "description": "An item of equipment for the trip.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "provider": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "needed"] }
+      },
+      "required": ["name", "status"]
+    },
+    "ItineraryEvent": {
+      "title": "ItineraryEvent",
+      "description": "An event in the trip schedule.",
+      "type": "object",
+      "properties": {
+        "time": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["time", "description"]
+    },
+    "Contribution": {
+      "title": "Contribution",
+      "description": "A member payment into the trip pot.",
+      "type": "object",
+      "properties": {
+        "memberName": { "type": "string" },
+        "amount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberName", "amount"]
     }
   },
   "firestore": {

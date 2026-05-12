@@ -27,42 +27,57 @@ service cloud.firestore {
 
     // Validation Blueprints
     function isValidTrip(data) {
-      return data.keys().hasAll(['name', 'members', 'ownerId', 'budget', 'createdAt', 'updatedAt']) &&
+      let requiredKeys = ['name', 'members', 'ownerId', 'budget', 'createdAt', 'updatedAt'];
+      return data.keys().hasAll(requiredKeys) &&
+             data.keys().size() == (6 + (('departureTime' in data) ? 1 : 0) + (('departureLocation' in data) ? 1 : 0) + (('locationUrl' in data) ? 1 : 0) + (('memberCommitments' in data) ? 1 : 0) + (('memberPhones' in data) ? 1 : 0)) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.budget is number &&
              data.members is list && data.members.size() >= 1 && data.members.size() <= 40 &&
-             (!('memberCommitments' in data) || data.memberCommitments is map) &&
              data.ownerId == request.auth.uid &&
              data.createdAt == request.time &&
-             data.updatedAt == request.time;
+             data.updatedAt == request.time &&
+             (!('departureTime' in data) || data.departureTime is string) &&
+             (!('departureLocation' in data) || data.departureLocation is string) &&
+             (!('locationUrl' in data) || data.locationUrl is string) &&
+             (!('memberCommitments' in data) || data.memberCommitments is map) &&
+             (!('memberPhones' in data) || data.memberPhones is map);
     }
 
     function isValidTripUpdate(existing, incoming) {
       return incoming.name is string && incoming.name.size() > 0 &&
              incoming.members is list && incoming.members.size() >= 1 &&
-             (!('memberCommitments' in incoming) || incoming.memberCommitments is map) &&
+             incoming.budget is number &&
              incoming.updatedAt == request.time &&
              incoming.ownerId == existing.ownerId &&
-             incoming.createdAt == existing.createdAt;
+             incoming.createdAt == existing.createdAt &&
+             (!('departureTime' in incoming) || incoming.departureTime is string) &&
+             (!('departureLocation' in incoming) || incoming.departureLocation is string) &&
+             (!('locationUrl' in incoming) || incoming.locationUrl is string) &&
+             (!('memberCommitments' in incoming) || incoming.memberCommitments is map) &&
+             (!('memberPhones' in incoming) || incoming.memberPhones is map);
     }
 
     function isValidTask(data) {
       return data.keys().hasAll(['title', 'assignedTo', 'completed']) &&
-             data.title is string && data.title.size() > 0 &&
-             data.assignedTo is string &&
+             data.keys().size() == 3 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.assignedTo is string && data.assignedTo.size() > 0 &&
              data.completed is bool;
     }
 
     function isValidExpense(data) {
-      return data.keys().hasAll(['description', 'amount', 'paidBy', 'createdAt']) &&
+      return data.keys().hasAll(['description', 'amount', 'paidBy', 'category', 'createdAt']) &&
+             data.keys().size() == 5 &&
              data.description is string && data.description.size() > 0 && data.description.size() <= 200 &&
              data.amount is number && data.amount > 0 &&
              data.paidBy is string && data.paidBy.size() > 0 &&
+             data.category in ['food', 'fuel', 'supplies', 'other'] &&
              data.createdAt == request.time;
     }
 
     function isValidContribution(data) {
       return data.keys().hasAll(['memberName', 'amount', 'createdAt']) &&
+             data.keys().size() == 3 &&
              data.memberName is string && data.memberName.size() > 0 &&
              data.amount is number && data.amount > 0 &&
              data.createdAt == request.time;
@@ -70,13 +85,17 @@ service cloud.firestore {
 
     function isValidGear(data) {
       return data.keys().hasAll(['name', 'provider', 'status']) &&
-             data.name is string && data.provider is string &&
+             data.keys().size() == 3 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.provider is string &&
              data.status in ['available', 'needed'];
     }
 
     function isValidEvent(data) {
       return data.keys().hasAll(['time', 'description']) &&
-             data.time is string && data.description is string;
+             data.keys().size() == 2 &&
+             data.time is string && data.time.size() > 0 && data.time.size() <= 50 &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 500;
     }
 
     // 1. Trips
@@ -89,7 +108,7 @@ service cloud.firestore {
       
       allow update: if isOwner(resource.data) && 
                       isValidTripUpdate(resource.data, request.resource.data) &&
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'members', 'budget', 'updatedAt', 'departureTime', 'departureLocation', 'locationUrl', 'memberCommitments']);
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'members', 'budget', 'updatedAt', 'departureTime', 'departureLocation', 'locationUrl', 'memberCommitments', 'memberPhones']);
       
       allow delete: if isOwner(resource.data);
 

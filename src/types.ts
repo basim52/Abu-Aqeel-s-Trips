@@ -4,6 +4,7 @@ export interface Trip {
   budget: number;
   members: string[];
   memberCommitments?: Record<string, number>;
+  memberPhones?: Record<string, string>;
   departureTime?: string;
   departureLocation?: string;
   locationUrl?: string;

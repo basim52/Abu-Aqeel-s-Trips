@@ -101,12 +101,15 @@ export default function App() {
   const [showDepartureModal, setShowDepartureModal] = useState(false);
   const [showAddContributionModal, setShowAddContributionModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [newBudget, setNewBudget] = useState('');
   const [userTrips, setUserTrips] = useState<Trip[]>([]);
 
   // Form states
   const [newTripName, setNewTripName] = useState('');
   const [newTripMembers, setNewTripMembers] = useState<string[]>(['']);
   const [newTripCommitments, setNewTripCommitments] = useState<Record<string, string>>({});
+  const [newTripPhones, setNewTripPhones] = useState<Record<string, string>>({});
   const [newExpenseDesc, setNewExpenseDesc] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
   const [newExpensePayer, setNewExpensePayer] = useState('');
@@ -117,6 +120,8 @@ export default function App() {
   const [newContributionAmount, setNewContributionAmount] = useState('');
   const [addMemberName, setAddMemberName] = useState('');
   const [addMemberCommitment, setAddMemberCommitment] = useState('');
+  const [addMemberPhone, setAddMemberPhone] = useState('');
+  const [editingMemberOriginalName, setEditingMemberOriginalName] = useState<string | null>(null);
   const [newGearName, setNewGearName] = useState('');
   const [newGearProvider, setNewGearProvider] = useState('');
   const [newEventTime, setNewEventTime] = useState('');
@@ -211,9 +216,11 @@ export default function App() {
     const tripId = Math.random().toString(36).substring(2, 10).toUpperCase();
     
     const commitments: Record<string, number> = {};
+    const phones: Record<string, string> = {};
     newTripMembers.forEach(m => {
       if (m.trim()) {
         commitments[m.trim()] = parseFloat(newTripCommitments[m.trim()] || '0');
+        phones[m.trim()] = newTripPhones[m.trim()] || '';
       }
     });
 
@@ -221,6 +228,7 @@ export default function App() {
       name: newTripName,
       members: newTripMembers.filter(m => m.trim()),
       memberCommitments: commitments,
+      memberPhones: phones,
       ownerId: user.uid,
       budget: 0,
       createdAt: serverTimestamp(),
@@ -254,24 +262,40 @@ export default function App() {
       setShowAddExpenseModal(false);
       setNewExpenseDesc('');
       setNewExpenseAmount('');
+      setNewExpenseCategory('other');
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `trips/${activeTrip.id}/expenses`);
     }
   };
 
-  const sendWhatsApp = (message: string) => {
-    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const sendWhatsApp = (message: string, phone?: string) => {
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+    const url = cleanPhone 
+      ? `https://wa.me/${cleanPhone}/?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
 
   const shareSettlement = (s: Settlement) => {
+    const phone = activeTrip?.memberPhones?.[s.from];
     const msg = `يا ${s.from}، عليك سداد قطية لـ ${s.to} بمبلغ ${s.amount} ريال. شكراً!`;
+    sendWhatsApp(msg, phone);
+  };
+
+  const sendAllTasksReminder = () => {
+    if (!activeTrip || pendingTasks.length === 0) return;
+    const msg = `⚠️ *تذكير بالمهام المعلقة - رحلة ${activeTrip.name}*
+${pendingTasks.map(t => `• ${t.title} (@${t.assignedTo})`).join('\n')}
+
+نرجو من الجميع التأكد من جاهزية المهام!
+_تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     sendWhatsApp(msg);
   };
 
   const shareTask = (t: Task) => {
+    const phone = activeTrip?.memberPhones?.[t.assignedTo];
     const msg = `يا ${t.assignedTo}، تذكير بخصوص رحلة ${activeTrip?.name}: ياليت تجيب معاك (${t.title}).`;
-    sendWhatsApp(msg);
+    sendWhatsApp(msg, phone);
   };
 
   const shareDeparture = () => {
@@ -284,51 +308,90 @@ export default function App() {
   };
 
   const reportRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const generatePDF = async () => {
-    if (!activeTrip || !reportRef.current) return;
+    if (!activeTrip || !reportRef.current || isGeneratingPDF) return;
     
+    setIsGeneratingPDF(true);
     try {
       const reportElement = reportRef.current;
-      reportElement.style.display = 'block';
+      
+      // Ensure element is ready and scrolled to top
+      reportElement.scrollTop = 0;
       
       // Wait for font rendering
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       const canvas = await html2canvas(reportElement, {
-        scale: 3, // Higher scale for text clarity
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        windowWidth: 800 // Consistent width for rendering
+        windowWidth: 800,
+        allowTaint: true
       });
       
-      const imgData = canvas.toDataURL('image/png', 1.0);
+      const imgData = canvas.toDataURL('image/jpeg', 0.9);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-      pdf.save(`تقرير_رحلة_${activeTrip.name}.pdf`);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       
-      reportElement.style.display = 'none';
+      const filename = `تقرير_رحلة_${activeTrip.name.replace(/\s+/g, '_')}.pdf`;
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
-      // Advanced WhatsApp summary
+      const budgetStatus = activeTrip.budget ? `\n📈 الميزانية: ${activeTrip.budget} ريال (${((totalSpent / activeTrip.budget) * 100).toFixed(0)}%)` : '';
       const summary = `📊 *تقرير رحلة ${activeTrip.name}*
-💰 إجمالي المصروفات: ${totalSpent} ريال
+💰 إجمالي المصروفات: ${totalSpent} ريال${budgetStatus}
 👥 عدد الأعضاء: ${activeTrip.members.length}
 👤 نصيب الشخص: ${share.toFixed(2)} ريال
 
 📢 *تفاصيل القَطية:*
 ${settlements.map(s => `• ${s.from} ⬅️ ${s.to}: ${s.amount} ريال`).join('\n')}
 
-✅ تم استخراج التقرير المفصل بصيغة PDF.
 _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+
+      // Priority 1: Web Share API (File)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            files: [pdfFile],
+            title: `تقرير رحلة ${activeTrip.name}`,
+            text: summary
+          });
+        } catch (shareErr: any) {
+          if (shareErr.name !== 'AbortError') {
+            pdf.save(filename);
+            sendWhatsApp(summary);
+          }
+        }
+      } 
+      // Priority 2: Web Share API (Text/Link if File fails)
+      else if (navigator.share) {
+        try {
+          pdf.save(filename);
+          await navigator.share({
+            title: `تقرير رحلة ${activeTrip.name}`,
+            text: summary
+          });
+        } catch (err) {
+          sendWhatsApp(summary);
+        }
+      }
+      // Fallback: Download + WhatsApp Link
+      else {
+        pdf.save(filename);
+        sendWhatsApp(summary);
+      }
       
-      sendWhatsApp(summary);
     } catch (err) {
       console.error('PDF Generation Error:', err);
-      alert('حدث خطأ أثناء إنشاء التقرير. حاول مرة أخرى.');
+      alert('حدث خطأ أثناء إنشاء التقرير. تأكد من ثبات الاتصال.');
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -355,7 +418,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
     link.click();
 
     // Also send as WhatsApp message for quick sharing
-    const gearSummary = `📦 *قائمة العزبة - ${activeTrip.name}*
+    const gearSummary = `📦 *قائمة مهام اعضاء الرحلة - ${activeTrip.name}*
 ${gear.map(item => `${item.status === 'available' ? '✅' : '⏳'} ${item.name} (${item.provider || 'الجميع'})`).join('\n')}
 
 _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
@@ -377,25 +440,87 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
     }
   };
 
+  const updateBudget = async () => {
+    if (!activeTrip) return;
+    try {
+      await setDoc(doc(db, 'trips', activeTrip.id), {
+        budget: parseFloat(newBudget || '0'),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      setShowBudgetModal(false);
+      setNewBudget('');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `trips/${activeTrip.id}`);
+    }
+  };
+
   const addMemberToTrip = async () => {
     if (!activeTrip || !addMemberName.trim()) return;
     
-    const newMembers = [...activeTrip.members, addMemberName.trim()];
-    const newCommitments = { 
-      ...(activeTrip.memberCommitments || {}), 
-      [addMemberName.trim()]: parseFloat(addMemberCommitment || '0') 
-    };
+    let newMembers = [...activeTrip.members];
+    let newCommitments = { ...(activeTrip.memberCommitments || {}) };
+    let newPhones = { ...(activeTrip.memberPhones || {}) };
+
+    if (editingMemberOriginalName) {
+      // Logic for editing existing member
+      const index = newMembers.indexOf(editingMemberOriginalName);
+      if (index !== -1) {
+        newMembers[index] = addMemberName.trim();
+        delete newCommitments[editingMemberOriginalName];
+        delete newPhones[editingMemberOriginalName];
+        newCommitments[addMemberName.trim()] = parseFloat(addMemberCommitment || '0');
+        newPhones[addMemberName.trim()] = addMemberPhone.trim();
+      }
+    } else {
+      // Logic for adding new member
+      if (newMembers.includes(addMemberName.trim())) {
+        alert('هذا العضو موجود بالفعل!');
+        return;
+      }
+      newMembers.push(addMemberName.trim());
+      newCommitments[addMemberName.trim()] = parseFloat(addMemberCommitment || '0');
+      newPhones[addMemberName.trim()] = addMemberPhone.trim();
+    }
     
     try {
       await setDoc(doc(db, 'trips', activeTrip.id), {
         members: newMembers,
         memberCommitments: newCommitments,
+        memberPhones: newPhones,
         updatedAt: serverTimestamp()
       }, { merge: true });
       
       setShowAddMemberModal(false);
       setAddMemberName('');
       setAddMemberCommitment('');
+      setAddMemberPhone('');
+      setEditingMemberOriginalName(null);
+
+      // Note: We're not updating references in other collections here for simplicity, 
+      // but in a production app, you'd want a batch write or cloud function to update
+      // expense.paidBy, task.assignedTo, etc.
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `trips/${activeTrip.id}`);
+    }
+  };
+
+  const removeMemberFromTrip = async (memberToRemove: string) => {
+    if (!activeTrip) return;
+    if (!window.confirm(`هل أنت متأكد من حذف العضو (${memberToRemove})؟ سيتم حذف بيانات التزامه المالي أيضاً.`)) return;
+
+    const newMembers = activeTrip.members.filter(m => m !== memberToRemove);
+    const newCommitments = { ...(activeTrip.memberCommitments || {}) };
+    const newPhones = { ...(activeTrip.memberPhones || {}) };
+    delete newCommitments[memberToRemove];
+    delete newPhones[memberToRemove];
+
+    try {
+      await setDoc(doc(db, 'trips', activeTrip.id), {
+        members: newMembers,
+        memberCommitments: newCommitments,
+        memberPhones: newPhones,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `trips/${activeTrip.id}`);
     }
@@ -484,16 +609,22 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
   };
 
   const deleteTrip = async (tripId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    
     if (!window.confirm('هل أنت متأكد من حذف هذه الرحلة؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    
     try {
-      await deleteDoc(doc(db, 'trips', tripId));
       if (activeTrip?.id === tripId) {
         setView('home');
         setActiveTrip(null);
       }
+      await deleteDoc(doc(db, 'trips', tripId));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `trips/${tripId}`);
+      console.error('Delete error:', err);
+      alert('حدث خطأ أثناء حذف الرحلة. تأكد من أنك صاحب الرحلة.');
     }
   };
 
@@ -695,15 +826,20 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                     >
                       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full -mr-16 -mt-16 group-hover:bg-emerald-100/50 transition-colors -z-10" />
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 relative z-30">
                           <button 
-                            onClick={(e) => deleteTrip(trip.id, e)} 
-                            className="p-2 text-rose-300 hover:text-white hover:bg-rose-500 rounded-lg transition-all"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteTrip(trip.id, e);
+                            }} 
+                            className="p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-lg transition-all cursor-pointer bg-white border border-rose-100 shadow-sm"
                             title="حذف الرحلة"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                          <History className="w-4 h-4 text-slate-300 group-hover:text-amber-500 mt-2" />
+                          <div className="p-2 text-slate-300">
+                            <History className="w-4 h-4" />
+                          </div>
                         </div>
                         <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">#{trip.id}</span>
                       </div>
@@ -738,7 +874,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                 onClick={() => setActiveTab('gear')} 
                 className={`px-6 py-3 rounded-2xl font-bold whitespace-nowrap transition-all ${activeTab === 'gear' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
               >
-                العزبة
+                مهام اعضاء الرحلة
               </button>
               <button 
                 onClick={() => setActiveTab('itinerary')} 
@@ -773,6 +909,61 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                     <span className="text-xl font-mono font-bold text-emerald-600 block">{activeTrip.id}</span>
                   </div>
                 </section>
+                
+                {/* Budget Section */}
+                <div 
+                  className="glass-card p-6 border-r-8 border-indigo-500 bg-gradient-to-r from-indigo-50/30 to-white cursor-pointer hover:shadow-lg transition-all"
+                  onClick={() => {
+                    setNewBudget(activeTrip.budget?.toString() || '');
+                    setShowBudgetModal(true);
+                  }}
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <TrendingUp className="text-indigo-500 w-5 h-5" />
+                        ميزانية الرحلة
+                      </h3>
+                      <p className="text-slate-500 text-sm">تتبع المصاريف مقابل الميزانية المحددة</p>
+                    </div>
+                    <div className="text-left">
+                      <span className="text-2xl font-black text-indigo-600">{activeTrip.budget || 0}</span>
+                      <span className="text-xs text-slate-400 mr-1">ريال</span>
+                    </div>
+                  </div>
+                  
+                  {activeTrip.budget && activeTrip.budget > 0 ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                        <span className="text-slate-400">النسبة المستهلكة</span>
+                        <span className={totalSpent > activeTrip.budget ? 'text-rose-500' : 'text-emerald-500'}>
+                          {((totalSpent / activeTrip.budget) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                        <motion.div 
+                          className={`h-full ${totalSpent > activeTrip.budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min((totalSpent / activeTrip.budget) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center pt-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className={`w-3 h-3 rounded-full ${totalSpent > activeTrip.budget ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
+                          <span className="text-slate-600">
+                            {totalSpent > activeTrip.budget 
+                              ? `تجاوزت الميزانية بـ ${totalSpent - activeTrip.budget} ريال` 
+                              : `متبقي ${activeTrip.budget - totalSpent} ريال من الميزانية`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center border-2 border-dashed border-indigo-100 rounded-2xl text-indigo-400 font-bold hover:bg-indigo-50/50 transition-colors">
+                      + اضغط لتحديد ميزانية للرحلة
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-6">
@@ -883,8 +1074,21 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       </div>
                     </div>
                     
-                    <button onClick={generatePDF} className="w-full btn-primary py-4 flex items-center justify-center gap-2">
-                      <FileText className="w-5 h-5" /> تصدير التقرير النهائي (PDF)
+                    <button 
+                      onClick={generatePDF} 
+                      disabled={isGeneratingPDF}
+                      className={`w-full py-4 flex items-center justify-center gap-2 rounded-2xl font-bold transition-all ${isGeneratingPDF ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white shadow-lg active:scale-95 hover:bg-emerald-700'}`}
+                    >
+                      {isGeneratingPDF ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
+                          جاري تجهيز PDF...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-5 h-5" /> تصدير التقرير النهائي (PDF)
+                        </>
+                      )}
                     </button>
                     <button onClick={shareDeparture} className="w-full btn-secondary py-4 flex items-center justify-center gap-2">
                       <MessageCircle className="w-5 h-5 text-emerald-500" /> إرسال تذكير بالموعد
@@ -943,7 +1147,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
               <div className="space-y-6">
                 <div className="glass-card p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold">تجهيز العزبة (الأدوات)</h3>
+                    <h3 className="text-xl font-bold">تجهيز مهام اعضاء الرحلة (الأدوات)</h3>
                     {gear.length > 0 && (
                       <button 
                         onClick={exportGearCSV} 
@@ -960,7 +1164,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       {activeTrip.members.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                     <button onClick={addGearItem} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2">
-                       <Plus className="w-5 h-5" /> إضافة للعزبة
+                       <Plus className="w-5 h-5" /> إضافة للمهمة
                     </button>
                   </div>
                 </div>
@@ -994,9 +1198,22 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                 </div>
 
                 <section className="space-y-4">
-                  <div className="flex items-center justify-between border-r-4 border-emerald-600 pr-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-r-4 border-emerald-600 pr-3 gap-3">
                     <h3 className="text-xl font-bold italic">مهام التحضير</h3>
-                    <button onClick={() => setShowAddTaskModal(true)} className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl transition-all hover:bg-emerald-100">+ مهمة جديدة</button>
+                    <div className="flex gap-2">
+                      {pendingTasks.length > 0 && (
+                        <button 
+                          onClick={sendAllTasksReminder} 
+                          className="text-amber-600 font-bold px-4 py-2 bg-amber-50 rounded-xl transition-all hover:bg-amber-100 flex items-center gap-2 text-sm"
+                          title="إرسال تذكير بالمهام المعلقة للجميع"
+                        >
+                          <MessageCircle className="w-4 h-4" /> تذكير الجميع
+                        </button>
+                      )}
+                      <button onClick={() => setShowAddTaskModal(true)} className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl transition-all hover:bg-emerald-100 text-sm">
+                        + مهمة جديدة
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-6">
                     <div className="glass-card divide-y overflow-hidden">
@@ -1129,7 +1346,10 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                   <div key={i} className="flex gap-2">
                     <div className="flex-1 space-y-1">
                       <input type="text" placeholder={`اسم العضو ${i+1}`} className="w-full border p-3 rounded-xl" value={m} onChange={e => { const nm = [...newTripMembers]; nm[i] = e.target.value; setNewTripMembers(nm); }} />
-                      <input type="number" placeholder="المبلغ الملتزم به" className="w-full border p-2 rounded-xl text-xs" value={newTripCommitments[m] || ''} onChange={e => setNewTripCommitments({...newTripCommitments, [m]: e.target.value})} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="number" placeholder="المبلغ الملتزم به" className="w-full border p-2 rounded-xl text-xs" value={newTripCommitments[m] || ''} onChange={e => setNewTripCommitments({...newTripCommitments, [m]: e.target.value})} />
+                        <input type="text" placeholder="رقم الواتساب (مثال: 966...)" className="w-full border p-2 rounded-xl text-xs" value={newTripPhones[m] || ''} onChange={e => setNewTripPhones({...newTripPhones, [m]: e.target.value})} />
+                      </div>
                     </div>
                     {newTripMembers.length > 1 && <button onClick={() => setNewTripMembers(newTripMembers.filter((_, idx) => idx !== i))} className="text-red-500"><Trash2 /></button>}
                   </div>
@@ -1159,22 +1379,18 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                 <option value="الصندوق">💰 الصندوق (من القَطية)</option>
                 {activeTrip?.members.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
-              <div className="flex gap-2">
-                {[
-                  { id: 'food', icon: <Utensils className="w-4 h-4" />, label: 'أكل' },
-                  { id: 'fuel', icon: <Fuel className="w-4 h-4" />, label: 'بنزين' },
-                  { id: 'supplies', icon: <Package className="w-4 h-4" />, label: 'تجهيزات' },
-                  { id: 'other', icon: <ShoppingBag className="w-4 h-4" />, label: 'أخرى' }
-                ].map(cat => (
-                  <button 
-                    key={cat.id} 
-                    onClick={() => setNewExpenseCategory(cat.id as any)}
-                    className={`flex-1 p-2 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${newExpenseCategory === cat.id ? 'border-emerald-600 bg-emerald-50 text-emerald-600' : 'border-slate-100 text-slate-400'}`}
-                  >
-                    {cat.icon}
-                    <span className="text-[10px] font-bold">{cat.label}</span>
-                  </button>
-                ))}
+              <div className="space-y-1">
+                <label className="text-sm font-bold text-slate-500">التصنيف</label>
+                <select 
+                  className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-slate-700" 
+                  value={newExpenseCategory} 
+                  onChange={e => setNewExpenseCategory(e.target.value as any)}
+                >
+                  <option value="food">🍱 أكل ومواد غذائية</option>
+                  <option value="fuel">⛽ بنزين ومحروقات</option>
+                  <option value="supplies">📦 تجهيزات وأدوات</option>
+                  <option value="other">🛍️ أخرى</option>
+                </select>
               </div>
               <button onClick={addExpense} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold">حفظ المصروف</button>
             </motion.div>
@@ -1265,15 +1481,56 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
 
         {showAddMemberModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAddMemberModal(false)} />
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => {
+              setShowAddMemberModal(false);
+              setEditingMemberOriginalName(null);
+              setAddMemberName('');
+              setAddMemberCommitment('');
+            }} />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-4 text-right">
               <div className="flex justify-between items-center border-b pb-4">
-                <button onClick={() => setShowAddMemberModal(false)} className="text-slate-400 p-1"><X className="w-6 h-6" /></button>
-                <h2 className="text-2xl font-bold">إضافة عضو للرحلة</h2>
+                <button onClick={() => {
+                  setShowAddMemberModal(false);
+                  setEditingMemberOriginalName(null);
+                  setAddMemberName('');
+                  setAddMemberCommitment('');
+                }} className="text-slate-400 p-1"><X className="w-6 h-6" /></button>
+                <h2 className="text-2xl font-bold">{editingMemberOriginalName ? 'تعديل بيانات العضو' : 'إضافة عضو للرحلة'}</h2>
               </div>
+              
               <div className="space-y-4 pt-4">
+                {/* List of current members */}
+                {!editingMemberOriginalName && activeTrip && activeTrip.members.length > 0 && (
+                  <div className="space-y-2 mb-6">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">الأعضاء الحاليون (اضغط للتعديل)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {activeTrip.members.map(m => (
+                        <div key={m} className="flex items-center gap-1 bg-slate-100 pl-1 pr-3 py-1 rounded-full border border-slate-200">
+                          <button 
+                            onClick={() => {
+                              setEditingMemberOriginalName(m);
+                              setAddMemberName(m);
+                              setAddMemberCommitment(activeTrip.memberCommitments?.[m]?.toString() || '0');
+                              setAddMemberPhone(activeTrip.memberPhones?.[m] || '');
+                            }}
+                            className="text-sm font-bold text-slate-700 hover:text-emerald-600 transition-colors"
+                          >
+                            {m}
+                          </button>
+                          <button 
+                            onClick={() => removeMemberFromTrip(m)}
+                            className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-1">
-                  <label className="text-sm font-bold text-slate-500">اسم العضو</label>
+                  <label className="text-sm font-bold text-slate-500">{editingMemberOriginalName ? 'الاسم الجديد' : 'اسم العضو'}</label>
                   <input 
                     type="text" 
                     placeholder="اسم العضو" 
@@ -1292,13 +1549,69 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                     onChange={e => setAddMemberCommitment(e.target.value)} 
                   />
                 </div>
-                <button 
-                  onClick={addMemberToTrip} 
-                  disabled={!addMemberName.trim()}
-                  className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all ${!addMemberName.trim() ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'}`}
-                >
-                  تأكيد الإضافة
-                </button>
+                <div className="space-y-1">
+                  <label className="text-sm font-bold text-slate-500">رقم الواتساب</label>
+                  <input 
+                    type="text" 
+                    placeholder="رقم الواتساب (مثال: 9665xxxxxxxx)" 
+                    className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" 
+                    value={addMemberPhone} 
+                    onChange={e => setAddMemberPhone(e.target.value)} 
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  {editingMemberOriginalName && (
+                    <button 
+                      onClick={() => {
+                        setEditingMemberOriginalName(null);
+                        setAddMemberName('');
+                        setAddMemberCommitment('');
+                      }} 
+                      className="flex-1 py-4 rounded-xl font-bold bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                    >
+                      إلغاء
+                    </button>
+                  )}
+                  <button 
+                    onClick={addMemberToTrip} 
+                    disabled={!addMemberName.trim()}
+                    className={`flex-[2] py-4 rounded-xl font-bold shadow-lg transition-all ${!addMemberName.trim() ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'}`}
+                  >
+                    {editingMemberOriginalName ? 'حفظ التعديلات' : 'تأكيد الإضافة'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showBudgetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowBudgetModal(false)} />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-4 text-right border-t-8 border-indigo-500">
+              <div className="flex justify-between items-center border-b pb-4">
+                <button onClick={() => setShowBudgetModal(false)} className="text-slate-400 p-1 hover:bg-slate-50 rounded-full transition-all"><X className="w-6 h-6" /></button>
+                <h2 className="text-2xl font-bold text-slate-800">تحديد ميزانية الرحلة</h2>
+              </div>
+              <div className="space-y-6 pt-4 text-right">
+                <p className="text-slate-500 text-sm leading-relaxed">حدد ميزانية تقديرية للرحلة لمساعدتك في تتبع المصاريف ومنع تجاوز السقف المالي.</p>
+                <div className="space-y-1">
+                  <label className="text-sm font-bold text-slate-500">الميزانية الإجمالية (ريال)</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      placeholder="أدخل ميزانية الرحلة.." 
+                      className="w-full border-2 border-slate-100 p-4 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all text-lg font-bold" 
+                      value={newBudget} 
+                      onChange={e => setNewBudget(e.target.value)} 
+                    />
+                    <ArrowRight className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowBudgetModal(false)} className="flex-1 py-4 rounded-2xl font-bold bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all">إلغاء</button>
+                  <button onClick={updateBudget} className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all">حفظ الميزانية</button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1325,9 +1638,14 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
           <div className="relative -mt-10">
             <button 
               onClick={generatePDF}
-              className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-200 text-white active:scale-95 transition-all"
+              disabled={isGeneratingPDF}
+              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${isGeneratingPDF ? 'bg-slate-200 text-slate-500' : 'bg-emerald-600 text-white shadow-emerald-200 active:scale-95'}`}
             >
-              <FileText className="w-6 h-6" />
+              {isGeneratingPDF ? (
+                <div className="w-6 h-6 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
+              ) : (
+                <FileText className="w-6 h-6" />
+              )}
             </button>
           </div>
           <button 
@@ -1335,7 +1653,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
             className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${activeTab === 'gear' ? 'text-emerald-600' : 'text-slate-400'}`}
           >
             <Package className={`w-6 h-6 ${activeTab === 'gear' ? 'fill-emerald-100' : ''}`} />
-            <span className="text-[10px] font-bold">العزبة</span>
+            <span className="text-[10px] font-bold">مهام اعضاء الرحلة</span>
           </button>
           <button 
             onClick={() => setActiveTab('itinerary')}
@@ -1351,13 +1669,16 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       <div 
         ref={reportRef} 
         style={{ 
-          display: 'none', 
+          position: 'fixed',
+          left: '-10000px',
+          top: 0,
           width: '210mm', 
           minHeight: '297mm', 
           padding: '20mm', 
           backgroundColor: 'white', 
           color: '#1e293b',
-          fontFamily: '"IBM Plex Sans Arabic", sans-serif'
+          zIndex: -1000,
+          boxSizing: 'border-box'
         }}
         className="rtl"
         dir="rtl"
@@ -1377,7 +1698,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-8 mb-12">
+        <div className="grid grid-cols-3 gap-8 mb-8">
           <div className="bg-emerald-50/50 p-8 rounded-[2.5rem] border-2 border-emerald-100 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-200/50 rounded-full -mr-6 -mt-6" />
             <p className="text-sm font-bold text-emerald-600 uppercase mb-2">إجمالي المصروفات</p>
@@ -1394,6 +1715,31 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
             <p className="text-4xl font-black text-indigo-900">{share.toFixed(2)} <span className="text-base font-bold">ريال</span></p>
           </div>
         </div>
+
+        {activeTrip?.budget && activeTrip.budget > 0 && (
+          <div className="bg-slate-50 p-8 rounded-[2.5rem] border-2 border-slate-200 mb-12 flex justify-between items-center">
+            <div className="flex-1">
+              <div className="flex justify-between items-end mb-3">
+                <p className="text-sm font-bold text-slate-500 uppercase">مؤشر استهلاك الميزانية ({activeTrip.budget} ريال)</p>
+                <p className={`text-lg font-black ${totalSpent > activeTrip.budget ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {((totalSpent / activeTrip.budget) * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full ${totalSpent > activeTrip.budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min((totalSpent / activeTrip.budget) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+            <div className="mr-8 text-left">
+              <p className="text-xs font-bold text-slate-400 uppercase mb-1">الحالة المالية</p>
+              <p className={`text-xl font-black ${totalSpent > activeTrip.budget ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {totalSpent > activeTrip.budget ? 'تعدى الميزانية' : 'تحت الميزانية'}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-10 mb-12">
           <div>
