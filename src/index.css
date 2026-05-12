@@ -6,6 +6,17 @@
   --font-display: "Alexandria", sans-serif;
 }
 
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 10px;
+}
+
 body {
   @apply text-slate-900 min-h-screen bg-fixed;
   background: radial-gradient(circle at top right, #f8fafc 0%, #f1f5f9 100%);

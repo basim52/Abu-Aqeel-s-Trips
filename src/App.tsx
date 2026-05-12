@@ -59,8 +59,61 @@ const DEFAULT_TRIP_IMAGES = [
   "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&q=80&w=800", // Camping
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=800", // Beach
   "https://images.unsplash.com/photo-1464851707681-f9d5fdaccea8?auto=format&fit=crop&q=80&w=800", // Road Trip
-  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=800"  // Lake
+  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=800", // Lake
+  "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=800", // Travel
+  "https://images.unsplash.com/photo-1493246507139-91e8bef99c02?auto=format&fit=crop&q=80&w=800", // Nature
+  "https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&q=80&w=800", // Norway
+  "https://images.unsplash.com/photo-1500835595270-276373fd8104?auto=format&fit=crop&q=80&w=800", // Sunset
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=800", // Forest
+  "https://images.unsplash.com/photo-1433086566089-f70a6604c80d?auto=format&fit=crop&q=80&w=800", // Waterfall
+  "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&q=80&w=800", // Landscape
+  "https://images.unsplash.com/photo-1501862700950-18382cd41497?auto=format&fit=crop&q=80&w=800", // Canyon
+  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&q=80&w=800", // Hills
+  "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&q=80&w=800", // Santorini
+  "https://images.unsplash.com/photo-1508672019048-805c876b67e2?auto=format&fit=crop&q=80&w=800", // Adventure
+  "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&q=80&w=800", // Road
+  "https://images.unsplash.com/photo-1517672651691-24622a91b550?auto=format&fit=crop&q=80&w=800", // Winter
+  "https://images.unsplash.com/photo-1438784473394-11e7af464108?auto=format&fit=crop&q=80&w=800", // Coast
+  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=800", // Valley
+  "https://images.unsplash.com/photo-1470252649358-96f52ad4f6f0?auto=format&fit=crop&q=80&w=800", // Morning
+  "https://images.unsplash.com/photo-1444464666168-49d633b867ad?auto=format&fit=crop&q=80&w=800", // Wildlife
+  "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=800", // Field
+  "https://images.unsplash.com/photo-1418063521192-29407f3c4db0?auto=format&fit=crop&q=80&w=800"  // Pine
 ];
+
+// Helper to compress image before saving to Firestore to avoid 1MB limit
+const compressImage = (base64Str: string): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 1000; // Optimal for small screens and avoids large file sizes
+      const MAX_HEIGHT = 600;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      // Quality 0.6 provides good compression while keeping enough detail
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+    };
+  });
+};
 
 // Error handling helper as required
 enum OperationType {
@@ -245,14 +298,23 @@ export default function App() {
 
   const updateTripImage = async () => {
     if (!activeTrip) return;
+    setIsGeneratingPDF(true); // Re-use loading state for image processing
     try {
+      let finalImage = newTripImage;
+      // Only compress if it's a data URL (uploaded file)
+      if (newTripImage.startsWith('data:')) {
+        finalImage = await compressImage(newTripImage);
+      }
+      
       await setDoc(doc(db, 'trips', activeTrip.id), {
-        imageUrl: newTripImage,
+        imageUrl: finalImage,
         updatedAt: serverTimestamp()
       }, { merge: true });
       setShowImageModal(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `trips/${activeTrip.id}`);
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -279,9 +341,14 @@ export default function App() {
       }
     });
 
+    let finalImageUrl = newTripImage;
+    if (newTripImage.startsWith('data:')) {
+      finalImageUrl = await compressImage(newTripImage);
+    }
+
     const tripData = {
       name: newTripName,
-      imageUrl: newTripImage,
+      imageUrl: finalImageUrl,
       members: newTripMembers.filter(m => m.trim()),
       memberCommitments: commitments,
       memberPhones: phones,
@@ -413,18 +480,32 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       const canvas = await html2canvas(element, {
-        scale: window.innerWidth < 768 ? 1.5 : 2, 
+        scale: window.innerWidth < 768 ? 0.8 : 1.5, // Lower scale for mobile to strictly avoid memory crashes
         useCORS: true,
-        logging: true, 
+        logging: false,
         backgroundColor: '#ffffff',
         width: 800,
         windowWidth: 800,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (clonedDoc) => {
+          const clonable = clonedDoc.querySelector('[ref]') as HTMLElement;
+          if (clonable) {
+            clonable.style.position = 'static';
+            clonable.style.visibility = 'visible';
+            clonable.style.left = '0';
+          }
+          // Simplify styles for mobile to save memory
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `* { -webkit-print-color-adjust: exact !important; } .glass-card { background: white !important; border: 1px solid #ddd !important; }`;
+          clonedDoc.head.appendChild(style);
+        }
       });
       
       // Restore original style
       element.style.cssText = originalStyle;
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.8); 
+      const imgData = canvas.toDataURL('image/jpeg', 0.5); // Fast and memory-efficient
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -1617,24 +1698,10 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
               
               <div className="space-y-4">
                 <label className="text-sm font-bold text-slate-500">اختر صورة جديدة</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {DEFAULT_TRIP_IMAGES.map((img, idx) => (
-                    <button 
-                      key={idx}
-                      onClick={() => setNewTripImage(img)}
-                      className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${newTripImage === img ? 'border-emerald-500 scale-105 shadow-md' : 'border-transparent'}`}
-                    >
-                      <img src={img} alt="Trip cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      {newTripImage === img && (
-                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
-                          <CheckCircle2 className="text-white w-6 h-6" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                  <label className={`relative aspect-video rounded-xl overflow-hidden border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
-                    <Camera className={`w-6 h-6 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'text-emerald-500' : 'text-slate-400'}`} />
-                    <span className="text-[10px] mt-1 text-slate-500 text-center">رفع صورة</span>
+                <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto p-1 custom-scrollbar">
+                  <label className={`relative aspect-square rounded-xl overflow-hidden border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-emerald-50 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage !== '' ? 'border-emerald-500 bg-emerald-50 shadow-inner' : 'border-slate-200'}`}>
+                    <Camera className={`w-6 h-6 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage !== '' ? 'text-emerald-500' : 'text-slate-400'}`} />
+                    <span className="text-[10px] mt-1 text-slate-500">رفع</span>
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1651,9 +1718,23 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       }} 
                     />
                     {!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage && (
-                      <img src={newTripImage} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover opacity-30" referrerPolicy="no-referrer" />
+                      <img src={newTripImage} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover opacity-40" referrerPolicy="no-referrer" />
                     )}
                   </label>
+                  {DEFAULT_TRIP_IMAGES.map((img, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setNewTripImage(img)}
+                      className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all hover:scale-105 ${newTripImage === img ? 'border-emerald-500 shadow-md ring-2 ring-emerald-100' : 'border-transparent'}`}
+                    >
+                      <img src={img} alt="Trip cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      {newTripImage === img && (
+                        <div className="absolute inset-0 bg-emerald-500/30 flex items-center justify-center">
+                          <CheckCircle2 className="text-white w-5 h-5 drop-shadow-md" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1678,24 +1759,10 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
               
               <div className="space-y-2 text-right">
                 <label className="text-sm font-bold text-slate-500">صورة الرحلة</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {DEFAULT_TRIP_IMAGES.map((img, idx) => (
-                    <button 
-                      key={idx}
-                      onClick={() => setNewTripImage(img)}
-                      className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${newTripImage === img ? 'border-emerald-500 scale-105 shadow-md' : 'border-transparent'}`}
-                    >
-                      <img src={img} alt="Trip cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      {newTripImage === img && (
-                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
-                          <CheckCircle2 className="text-white w-6 h-6" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                  <label className={`relative aspect-video rounded-xl overflow-hidden border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
-                    <Camera className={`w-6 h-6 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'text-emerald-500' : 'text-slate-400'}`} />
-                    <span className="text-[10px] mt-1 text-slate-500">رفع صورة</span>
+                <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                  <label className={`relative aspect-square rounded-xl overflow-hidden border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-emerald-50 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage !== '' ? 'border-emerald-500 bg-emerald-50 shadow-inner' : 'border-slate-200'}`}>
+                    <Camera className={`w-6 h-6 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage !== '' ? 'text-emerald-500' : 'text-slate-400'}`} />
+                    <span className="text-[10px] mt-1 text-slate-500">رفع</span>
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1703,6 +1770,10 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 5 ميجابايت');
+                            return;
+                          }
                           const reader = new FileReader();
                           reader.onloadend = () => {
                             setNewTripImage(reader.result as string);
@@ -1712,9 +1783,23 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       }} 
                     />
                     {!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage && (
-                      <img src={newTripImage} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover opacity-30" referrerPolicy="no-referrer" />
+                      <img src={newTripImage} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover opacity-40" referrerPolicy="no-referrer" />
                     )}
                   </label>
+                  {DEFAULT_TRIP_IMAGES.map((img, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setNewTripImage(img)}
+                      className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all hover:scale-105 ${newTripImage === img ? 'border-emerald-500 shadow-md ring-2 ring-emerald-100' : 'border-transparent'}`}
+                    >
+                      <img src={img} alt="Trip cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      {newTripImage === img && (
+                        <div className="absolute inset-0 bg-emerald-500/30 flex items-center justify-center">
+                          <CheckCircle2 className="text-white w-5 h-5 drop-shadow-md" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
 
