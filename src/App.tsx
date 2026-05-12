@@ -47,9 +47,20 @@ import {
   ShoppingBag,
   Download,
   Calendar,
-  Pencil
+  Pencil,
+  Image as ImageIcon,
+  Camera
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+const DEFAULT_TRIP_IMAGES = [
+  "https://images.unsplash.com/photo-1542144611-13e9049448aa?auto=format&fit=crop&q=80&w=800", // Desert
+  "https://images.unsplash.com/photo-1544198365-f5d60b6d8190?auto=format&fit=crop&q=80&w=800", // Mountains
+  "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&q=80&w=800", // Camping
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=800", // Beach
+  "https://images.unsplash.com/photo-1464851707681-f9d5fdaccea8?auto=format&fit=crop&q=80&w=800", // Road Trip
+  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=800"  // Lake
+];
 
 // Error handling helper as required
 enum OperationType {
@@ -103,6 +114,7 @@ export default function App() {
   const [showAddContributionModal, setShowAddContributionModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
   const [newBudget, setNewBudget] = useState('');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -112,6 +124,7 @@ export default function App() {
 
   // Form states
   const [newTripName, setNewTripName] = useState('');
+  const [newTripImage, setNewTripImage] = useState(DEFAULT_TRIP_IMAGES[0]);
   const [newTripMembers, setNewTripMembers] = useState<string[]>(['']);
   const [newTripCommitments, setNewTripCommitments] = useState<Record<string, string>>({});
   const [newTripPhones, setNewTripPhones] = useState<Record<string, string>>({});
@@ -180,6 +193,7 @@ export default function App() {
               prev.departureTime !== data.departureTime ||
               prev.departureLocation !== data.departureLocation ||
               prev.locationUrl !== data.locationUrl ||
+              prev.imageUrl !== data.imageUrl ||
               JSON.stringify(prev.members) !== JSON.stringify(data.members);
             
             return changed ? data : prev;
@@ -229,6 +243,19 @@ export default function App() {
     }
   }, [activeTrip?.id]); // Only re-run if the trip ID changes
 
+  const updateTripImage = async () => {
+    if (!activeTrip) return;
+    try {
+      await setDoc(doc(db, 'trips', activeTrip.id), {
+        imageUrl: newTripImage,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      setShowImageModal(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `trips/${activeTrip.id}`);
+    }
+  };
+
   const login = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -254,6 +281,7 @@ export default function App() {
 
     const tripData = {
       name: newTripName,
+      imageUrl: newTripImage,
       members: newTripMembers.filter(m => m.trim()),
       memberCommitments: commitments,
       memberPhones: phones,
@@ -269,6 +297,7 @@ export default function App() {
       setView('trip');
       setShowNewTripModal(false);
       setNewTripName('');
+      setNewTripImage(DEFAULT_TRIP_IMAGES[0]);
       setNewTripMembers(['']);
       setNewTripCommitments({});
     } catch (err) {
@@ -369,40 +398,37 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     try {
       // Ensure element is ready and scrolled to top
       window.scrollTo(0, 0);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Make the element visible but off-screen and relative to body to avoid clipping issues
+      const originalStyle = element.style.cssText;
+      element.style.position = 'absolute';
+      element.style.left = '0';
+      element.style.top = '0';
+      element.style.zIndex = '-9999';
+      element.style.opacity = '1';
+      element.style.visibility = 'visible';
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       const canvas = await html2canvas(element, {
-        scale: window.innerWidth < 768 ? 1.2 : 2, // Lower scale for mobile to save memory
+        scale: window.innerWidth < 768 ? 1 : 2, // Scale 1 for mobile to avoid memory crashes
         useCORS: true,
-        logging: false,
+        logging: true, 
         backgroundColor: '#ffffff',
+        width: element.scrollWidth,
+        height: element.scrollHeight,
         windowWidth: 800,
-        onclone: (clonedDoc) => {
-          const style = clonedDoc.createElement('style');
-          style.innerHTML = `
-            * { color-scheme: light !important; }
-            .text-emerald-900 { color: #064e3b !important; }
-            .text-emerald-600 { color: #059669 !important; }
-            .bg-emerald-600 { background-color: #059669 !important; }
-            .bg-emerald-50 { background-color: #ecfdf5 !important; }
-            .border-emerald-600 { border-color: #059669 !important; }
-            .text-slate-800 { color: #1e293b !important; }
-            .text-slate-500 { color: #64748b !important; }
-            .bg-slate-100 { background-color: #f1f5f9 !important; }
-            .border-slate-200 { border-color: #e2e8f0 !important; }
-            .text-amber-700 { color: #b45309 !important; }
-            .bg-amber-100 { background-color: #fef3c7 !important; }
-          `;
-          clonedDoc.head.appendChild(style);
-        }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.85); // Slightly lower quality for mobile
+      // Restore original style
+      element.style.cssText = originalStyle;
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.82); 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297), undefined, 'FAST');
       
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
@@ -947,11 +973,22 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                         setActiveTrip(trip);
                         setView('trip');
                       }}
-                      className="glass-card p-6 text-right hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer border-t-4 border-emerald-500 relative overflow-hidden"
+                      className="glass-card overflow-hidden text-right hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer border-t-4 border-emerald-500 relative"
                     >
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full -mr-16 -mt-16 group-hover:bg-emerald-100/50 transition-colors -z-10" />
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex gap-2 relative z-30">
+                      <div className="h-32 w-full relative overflow-hidden">
+                        <img 
+                          src={trip.imageUrl || DEFAULT_TRIP_IMAGES[0]} 
+                          alt={trip.name} 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        <span className="absolute bottom-3 right-4 text-white font-bold text-lg">{trip.name}</span>
+                        <span className="absolute top-3 left-3 text-[10px] font-mono font-bold text-white bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full border border-white/20">#{trip.id}</span>
+                      </div>
+                      
+                      <div className="p-5 space-y-4">
+                        <div className="flex justify-between items-center">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -962,16 +999,15 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                          <div className="p-2 text-slate-300">
-                            <History className="w-4 h-4" />
+                          <div className="flex items-center gap-3 text-slate-500 text-xs">
+                            <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                              <Users className="w-3.5 h-3.5" /> {trip.members.length}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> {trip.createdAt?.toDate ? new Date(trip.createdAt.toDate()).toLocaleDateString('ar-EG') : '-'}
+                            </span>
                           </div>
                         </div>
-                        <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">#{trip.id}</span>
-                      </div>
-                      <h4 className="font-bold text-xl mb-1 text-slate-800">{trip.name}</h4>
-                      <div className="flex items-center justify-end gap-4 text-slate-500 text-sm mt-3">
-                        <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {trip.members.length}</span>
-                        <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {trip.createdAt?.toDate ? new Date(trip.createdAt.toDate()).toLocaleDateString('ar-EG') : '-'}</span>
                       </div>
                     </div>
                   ))}
@@ -1011,6 +1047,41 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
 
             {activeTab === 'summary' && (
               <>
+                {/* Trip Banner */}
+                <div className="relative h-48 md:h-64 w-full rounded-3xl overflow-hidden shadow-xl mb-8 group">
+                  <img 
+                    src={activeTrip.imageUrl || DEFAULT_TRIP_IMAGES[0]} 
+                    alt={activeTrip.name}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6 md:p-8">
+                    <div className="flex justify-between items-end">
+                      <div className="text-right">
+                        <h2 className="text-3xl md:text-5xl font-black text-white mb-2">{activeTrip.name}</h2>
+                        <div className="flex items-center gap-4 text-white/80 text-sm md:text-base">
+                          <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {activeTrip.members.length} أعضاء</span>
+                          <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {activeTrip.createdAt?.toDate ? new Date(activeTrip.createdAt.toDate()).toLocaleDateString('ar-EG') : '-'}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => {
+                            setNewTripImage(activeTrip.imageUrl || DEFAULT_TRIP_IMAGES[0]);
+                            setShowImageModal(true);
+                          }} 
+                          className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white p-3 rounded-2xl transition-all border border-white/20"
+                        >
+                          <Pencil className="w-5 h-5" />
+                        </button>
+                        <button onClick={generatePDF} disabled={isGeneratingPDF} className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white p-3 rounded-2xl transition-all border border-white/20">
+                          {isGeneratingPDF ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="glass-card p-5 border-r-8 border-emerald-600 bg-gradient-to-r from-emerald-50/50 to-white">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">إجمالي الصرف</span>
@@ -1534,6 +1605,66 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
             )}
           </div>
         )}
+        {showImageModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowImageModal(false)} />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-6 text-right">
+              <div className="flex justify-between items-center border-b pb-4">
+                <button onClick={() => setShowImageModal(false)} className="text-slate-400 p-1"><X className="w-6 h-6" /></button>
+                <h2 className="text-2xl font-bold">تغيير صورة الرحلة</h2>
+              </div>
+              
+              <div className="space-y-4">
+                <label className="text-sm font-bold text-slate-500">اختر صورة جديدة</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {DEFAULT_TRIP_IMAGES.map((img, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setNewTripImage(img)}
+                      className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${newTripImage === img ? 'border-emerald-500 scale-105 shadow-md' : 'border-transparent'}`}
+                    >
+                      <img src={img} alt="Trip cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      {newTripImage === img && (
+                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                          <CheckCircle2 className="text-white w-6 h-6" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                  <label className={`relative aspect-video rounded-xl overflow-hidden border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+                    <Camera className={`w-6 h-6 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'text-emerald-500' : 'text-slate-400'}`} />
+                    <span className="text-[10px] mt-1 text-slate-500 text-center">رفع صورة</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setNewTripImage(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }} 
+                    />
+                    {!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage && (
+                      <img src={newTripImage} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover opacity-30" referrerPolicy="no-referrer" />
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              <button 
+                onClick={updateTripImage} 
+                className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all"
+              >
+                حفظ التغييرات
+              </button>
+            </motion.div>
+          </div>
+        )}
       </main>
 
       {/* Modals */}
@@ -1541,8 +1672,51 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
         {showNewTripModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowNewTripModal(false)} />
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-4 text-right">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-4 text-right max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold">رحلة جديدة</h2>
+              
+              <div className="space-y-2 text-right">
+                <label className="text-sm font-bold text-slate-500">صورة الرحلة</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {DEFAULT_TRIP_IMAGES.map((img, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setNewTripImage(img)}
+                      className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${newTripImage === img ? 'border-emerald-500 scale-105 shadow-md' : 'border-transparent'}`}
+                    >
+                      <img src={img} alt="Trip cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      {newTripImage === img && (
+                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                          <CheckCircle2 className="text-white w-6 h-6" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                  <label className={`relative aspect-video rounded-xl overflow-hidden border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+                    <Camera className={`w-6 h-6 ${!DEFAULT_TRIP_IMAGES.includes(newTripImage) ? 'text-emerald-500' : 'text-slate-400'}`} />
+                    <span className="text-[10px] mt-1 text-slate-500">رفع صورة</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setNewTripImage(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }} 
+                    />
+                    {!DEFAULT_TRIP_IMAGES.includes(newTripImage) && newTripImage && (
+                      <img src={newTripImage} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover opacity-30" referrerPolicy="no-referrer" />
+                    )}
+                  </label>
+                </div>
+              </div>
+
               <input type="text" placeholder="اسم الرحلة" className="w-full border p-3 rounded-xl" value={newTripName} onChange={e => setNewTripName(e.target.value)} />
               <div className="space-y-2">
                 {newTripMembers.map((m, i) => (
@@ -1905,31 +2079,33 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
         ref={reportRef} 
         style={{ 
           position: 'fixed',
-          left: '-10000px',
+          left: '-5000px',
           top: 0,
-          width: '210mm', 
-          minHeight: '297mm', 
-          padding: '20mm', 
+          width: '800px', 
           backgroundColor: 'white', 
           color: '#1e293b',
           zIndex: -1000,
-          boxSizing: 'border-box'
         }}
-        className="rtl"
+        className="rtl p-10"
         dir="rtl"
       >
-        <div className="border-b-8 border-emerald-600 pb-10 mb-10 flex justify-between items-start">
-          <div className="space-y-2">
+        <div className="border-b-8 border-emerald-600 pb-10 mb-10 flex justify-between items-center">
+          <div className="space-y-4">
             <h1 className="text-5xl font-black text-emerald-900 mb-2">تقرير الرحلة النهائي</h1>
-            <div className="bg-emerald-100 text-emerald-800 px-4 py-1.5 rounded-full text-lg font-bold inline-block">
+            <div className="bg-emerald-100 text-emerald-800 px-6 py-2 rounded-full text-2xl font-bold inline-block">
               {activeTrip?.name}
             </div>
+            {activeTrip?.imageUrl && (
+              <div className="w-full h-40 rounded-3xl overflow-hidden mt-4 border-2 border-emerald-100">
+                <img src={activeTrip.imageUrl} alt="Trip cover" className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
+              </div>
+            )}
           </div>
           <div className="text-left font-mono">
-            <p className="text-slate-400 text-xs mb-1">معرف الرحلة</p>
-            <p className="font-bold text-slate-800 mb-4">#{activeTrip?.id}</p>
-            <p className="text-slate-400 text-xs mb-1">تاريخ التقرير</p>
-            <p className="font-bold text-slate-800 italic">{new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p className="text-slate-400 text-sm mb-1 uppercase tracking-widest">TRIP ID</p>
+            <p className="font-bold text-2xl text-emerald-800 mb-4">#{activeTrip?.id}</p>
+            <p className="text-slate-400 text-sm mb-1 uppercase tracking-widest">DATE</p>
+            <p className="font-bold text-slate-800 italic">{new Date().toLocaleDateString('ar-SA')}</p>
           </div>
         </div>
 
@@ -2054,7 +2230,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Hidden Gear Report */}
       <div 
         ref={gearPrintRef} 
-        style={{ position: 'fixed', left: '-10000px', top: 0, width: '210mm', minHeight: '297mm', padding: '20mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000, boxSizing: 'border-box' }}
+        style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
         className="rtl"
         dir="rtl"
       >
@@ -2091,7 +2267,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Hidden Expenses Report */}
       <div 
         ref={expensesPrintRef} 
-        style={{ position: 'fixed', left: '-10000px', top: 0, width: '210mm', minHeight: '297mm', padding: '20mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000, boxSizing: 'border-box' }}
+        style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
         className="rtl"
         dir="rtl"
       >
@@ -2128,7 +2304,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       {/* Hidden Prep Tasks Report */}
       <div 
         ref={tasksPrintRef} 
-        style={{ position: 'fixed', left: '-10000px', top: 0, width: '210mm', minHeight: '297mm', padding: '20mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000, boxSizing: 'border-box' }}
+        style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
         className="rtl"
         dir="rtl"
       >

@@ -13,6 +13,7 @@
         "departureTime": { "type": "string", "description": "Time/Date of departure." },
         "departureLocation": { "type": "string", "description": "Location of departure." },
         "locationUrl": { "type": "string", "description": "URL link to the departure location (e.g. Google Maps)." },
+        "imageUrl": { "type": "string", "description": "URL of the trip image." },
         "ownerId": { "type": "string", "description": "UID of the user who created the trip." },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

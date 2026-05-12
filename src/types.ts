@@ -8,6 +8,7 @@ export interface Trip {
   departureTime?: string;
   departureLocation?: string;
   locationUrl?: string;
+  imageUrl?: string;
   ownerId: string;
   createdAt: any;
   updatedAt: any;
