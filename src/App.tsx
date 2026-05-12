@@ -496,20 +496,60 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
             target.style.opacity = '1';
           }
 
-          // 2. Multi-stage color sanitization for Tailwind 4
-          const allElements = clonedDoc.getElementsByTagName('*');
-          for (let i = 0; i < allElements.length; i++) {
-            const el = allElements[i] as HTMLElement;
-            // Sanitizing inline styles
-            if (el.style && el.style.cssText && el.style.cssText.includes('oklch')) {
-              el.style.cssText = el.style.cssText.replace(/oklch\([^)]+\)/g, '#777777');
-            }
-          }
+          // 2. Inject a high-priority stylesheet for the clone to ensure colors
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * { -webkit-print-color-adjust: exact !important; font-family: 'Alexandria', sans-serif !important; }
+            .glass-card { background: white !important; border: 1px solid #e2e8f0 !important; box-shadow: none !important; }
+            
+            /* Color Overrides for PDF Capture (Tailwind 4 / oklch compatibility) */
+            .bg-emerald-600 { background-color: #059669 !important; }
+            .bg-emerald-500 { background-color: #10b981 !important; }
+            .bg-emerald-50 { background-color: #ecfdf5 !important; }
+            .bg-emerald-100 { background-color: #d1fae5 !important; }
+            .text-emerald-600 { color: #059669 !important; }
+            .text-emerald-700 { color: #047857 !important; }
+            .text-emerald-900 { color: #064e3b !important; }
+            .border-emerald-600 { border-color: #059669 !important; }
+            
+            .bg-amber-500 { background-color: #f59e0b !important; }
+            .bg-amber-600 { background-color: #d97706 !important; }
+            .bg-amber-50 { background-color: #fffbeb !important; }
+            .bg-amber-100 { background-color: #fef3c7 !important; }
+            .text-amber-600 { color: #d97706 !important; }
+            .text-amber-700 { color: #b45309 !important; }
+            .text-amber-900 { color: #78350f !important; }
+            .border-amber-500 { border-color: #f59e0b !important; }
+            
+            .bg-rose-50 { background-color: #fff1f2 !important; }
+            .bg-rose-500 { background-color: #f43f5e !important; }
+            .bg-rose-600 { background-color: #e11d48 !important; }
+            .text-rose-600 { color: #e11d48 !important; }
+            
+            .bg-sky-50 { background-color: #f0f9ff !important; }
+            .bg-sky-100 { background-color: #e0f2fe !important; }
+            .bg-sky-600 { background-color: #0284c7 !important; }
+            .text-sky-600 { color: #0284c7 !important; }
+            .text-sky-700 { color: #0369a1 !important; }
+            
+            .bg-slate-50 { background-color: #f8fafc !important; }
+            .bg-slate-100 { background-color: #f1f5f9 !important; }
+            .bg-slate-900 { background-color: #0f172a !important; }
+            .text-slate-400 { color: #94a3b8 !important; }
+            .text-slate-600 { color: #475569 !important; }
+            .text-slate-700 { color: #334155 !important; }
+            .text-slate-800 { color: #1e293b !important; }
+            .text-slate-900 { color: #0f172a !important; }
+            
+            img { max-width: 100% !important; border-radius: 8px !important; }
+          `;
+          clonedDoc.head.appendChild(style);
 
-          // Replacing variables and rules in style tags
+          // 3. Sanitization for Tailwind 4 oklch in style tags
           const styleTags = clonedDoc.getElementsByTagName('style');
           for (let i = 0; i < styleTags.length; i++) {
             try {
+              // Replace common oklch patterns with hex equivalents where possible, or fallback to a soft color
               styleTags[i].innerHTML = styleTags[i].innerHTML.replace(/oklch\([^)]+\)/g, (match) => {
                 if (match.includes('96.27% 0.01 224.43')) return '#ecfdf5'; // emerald-50
                 if (match.includes('51.97% 0.17 162.7')) return '#059669'; // emerald-600
@@ -517,9 +557,11 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
                 if (match.includes('92.38% 0.03 89.26')) return '#fffbeb'; // amber-50
                 if (match.includes('100% 0 0')) return '#ffffff'; // white
                 if (match.includes('0% 0 0')) return '#000000'; // black
-                return '#777777'; 
+                if (match.includes('43.14% 0.13 162.7')) return '#047857'; // emerald-700
+                // For anything else, return a slightly colored fallback instead of plain grey
+                return '#475569'; 
               });
-            } catch (e) { /* ignore read-only style tags failing in some browsers */ }
+            } catch (e) { /* ignore */ }
           }
         }
       });
