@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "Trip": {
+      "title": "Trip",
+      "description": "A group trip requiring expense sharing.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the trip." },
+        "budget": { "type": "number", "description": "Estimated total budget." },
+        "members": { "type": "array", "description": "List of participant names." },
+        "memberCommitments": { "type": "object", "additionalProperties": { "type": "number" }, "description": "Mapping of member name to committed amount." },
+        "departureTime": { "type": "string", "description": "Time/Date of departure." },
+        "departureLocation": { "type": "string", "description": "Location of departure." },
+        "locationUrl": { "type": "string", "description": "URL link to the departure location (e.g. Google Maps)." },
+        "ownerId": { "type": "string", "description": "UID of the user who created the trip." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "members", "ownerId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A task or item reminder for a specific person.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["title", "assignedTo"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "An individual expense logged for a trip.",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string", "description": "What was the expense for?" },
+        "amount": { "type": "number", "description": "The cost of the expense." },
+        "paidBy": { "type": "string", "description": "Name of the member who paid." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["description", "amount", "paidBy"]
+    }
+  },
+  "firestore": {
+    "/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Root collection for trips."
+    },
+    "/trips/{tripId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Subcollection for expenses within a specific trip."
+    },
+    "/trips/{tripId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Subcollection for tasks/items within a specific trip."
+    },
+    "/trips/{tripId}/contributions/{contributionId}": {
+      "schema": "Contribution",
+      "description": "Subcollection for member payments into the trip pot."
+    },
+    "/trips/{tripId}/gear/{gearId}": {
+      "schema": "GearItem",
+      "description": "Subcollection for trip equipment and tools."
+    },
+    "/trips/{tripId}/itinerary/{eventId}": {
+      "schema": "ItineraryEvent",
+      "description": "Subcollection for trip schedule/program."
+    }
+  }
+}

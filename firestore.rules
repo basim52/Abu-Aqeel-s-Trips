@@ -1,0 +1,135 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connectivity Test
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(tripData) {
+      return isSignedIn() && tripData.ownerId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation Blueprints
+    function isValidTrip(data) {
+      return data.keys().hasAll(['name', 'members', 'ownerId', 'budget', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.budget is number &&
+             data.members is list && data.members.size() >= 1 && data.members.size() <= 40 &&
+             (!('memberCommitments' in data) || data.memberCommitments is map) &&
+             data.ownerId == request.auth.uid &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidTripUpdate(existing, incoming) {
+      return incoming.name is string && incoming.name.size() > 0 &&
+             incoming.members is list && incoming.members.size() >= 1 &&
+             (!('memberCommitments' in incoming) || incoming.memberCommitments is map) &&
+             incoming.updatedAt == request.time &&
+             incoming.ownerId == existing.ownerId &&
+             incoming.createdAt == existing.createdAt;
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'assignedTo', 'completed']) &&
+             data.title is string && data.title.size() > 0 &&
+             data.assignedTo is string &&
+             data.completed is bool;
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['description', 'amount', 'paidBy', 'createdAt']) &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 200 &&
+             data.amount is number && data.amount > 0 &&
+             data.paidBy is string && data.paidBy.size() > 0 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidContribution(data) {
+      return data.keys().hasAll(['memberName', 'amount', 'createdAt']) &&
+             data.memberName is string && data.memberName.size() > 0 &&
+             data.amount is number && data.amount > 0 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidGear(data) {
+      return data.keys().hasAll(['name', 'provider', 'status']) &&
+             data.name is string && data.provider is string &&
+             data.status in ['available', 'needed'];
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['time', 'description']) &&
+             data.time is string && data.description is string;
+    }
+
+    // 1. Trips
+    match /trips/{tripId} {
+      // Allow get/list if signed in (sharing by ID)
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid; // Allow listing own trips
+
+      allow create: if isSignedIn() && isValidId(tripId) && isValidTrip(request.resource.data);
+      
+      allow update: if isOwner(resource.data) && 
+                      isValidTripUpdate(resource.data, request.resource.data) &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'members', 'budget', 'updatedAt', 'departureTime', 'departureLocation', 'locationUrl', 'memberCommitments']);
+      
+      allow delete: if isOwner(resource.data);
+
+      // 2. Tasks subcollection
+      match /tasks/{taskId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(taskId) && isValidTask(request.resource.data);
+        allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed']);
+        allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+      }
+
+      // 3. Expenses subcollection
+      match /expenses/{expenseId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(expenseId) && isValidExpense(request.resource.data);
+        allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+      }
+
+      // 4. Contributions subcollection
+      match /contributions/{contributionId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(contributionId) && isValidContribution(request.resource.data);
+        allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+      }
+
+      // 5. Gear subcollection
+      match /gear/{gearId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(gearId) && isValidGear(request.resource.data);
+        allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'provider']);
+        allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+      }
+
+      // 6. Itinerary subcollection
+      match /itinerary/{eventId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(eventId) && isValidEvent(request.resource.data);
+        allow update: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+        allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Alexandria", sans-serif;
+}
+
+body {
+  @apply text-slate-900 min-h-screen bg-fixed;
+  background: radial-gradient(circle at top right, #f8fafc 0%, #f1f5f9 100%);
+  direction: rtl;
+}
+
+.glass-card {
+  @apply bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl transition-all duration-300;
+}
+
+.glass-card:hover {
+  @apply shadow-[0_8px_30px_rgb(0,0,0,0.08)] border-emerald-100;
+}
+
+.btn-primary {
+  @apply bg-emerald-600 text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-emerald-100;
+}
+
+.btn-yellow {
+  @apply bg-amber-400 text-amber-950 rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-amber-100/50;
+}
+
+input, select {
+  @apply focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all;
+}
