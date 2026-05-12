@@ -78,7 +78,17 @@ const DEFAULT_TRIP_IMAGES = [
   "https://images.unsplash.com/photo-1470252649358-96f52ad4f6f0?auto=format&fit=crop&q=80&w=800", // Morning
   "https://images.unsplash.com/photo-1444464666168-49d633b867ad?auto=format&fit=crop&q=80&w=800", // Wildlife
   "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=800", // Field
-  "https://images.unsplash.com/photo-1418063521192-29407f3c4db0?auto=format&fit=crop&q=80&w=800"  // Pine
+  "https://images.unsplash.com/photo-1418063521192-29407f3c4db0?auto=format&fit=crop&q=80&w=800", // Pine
+  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&q=80&w=800", // Fog
+  "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&q=80&w=800", // Forest Path
+  "https://images.unsplash.com/photo-1441834491424-df3b77209705?auto=format&fit=crop&q=80&w=800", // Dusk
+  "https://images.unsplash.com/photo-1475113548554-5a36f1f523d6?auto=format&fit=crop&q=80&w=800", // River
+  "https://images.unsplash.com/photo-1426604966848-d7adac402bdb?auto=format&fit=crop&q=80&w=800", // Peak
+  "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?auto=format&fit=crop&q=80&w=800", // Meadow
+  "https://images.unsplash.com/photo-1476820865390-c59aeeb9e191?auto=format&fit=crop&q=80&w=800", // Route
+  "https://images.unsplash.com/photo-1506260408121-e353d10b87c7?auto=format&fit=crop&q=80&w=800", // Horizon
+  "https://images.unsplash.com/photo-1494500613607-44933a39e947?auto=format&fit=crop&q=80&w=800", // Aurora
+  "https://images.unsplash.com/photo-1431794062232-2a99a54c1c6c?auto=format&fit=crop&q=80&w=800"  // Deep Woods
 ];
 
 // Helper to compress image before saving to Firestore to avoid 1MB limit
@@ -477,10 +487,10 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       element.style.visibility = 'visible';
       element.style.pointerEvents = 'none';
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       const canvas = await html2canvas(element, {
-        scale: window.innerWidth < 768 ? 0.8 : 1.5, // Lower scale for mobile to strictly avoid memory crashes
+        scale: window.innerWidth < 768 ? 0.8 : 1.5, 
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
@@ -489,15 +499,13 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
         scrollX: 0,
         scrollY: 0,
         onclone: (clonedDoc) => {
-          const clonable = clonedDoc.querySelector('[ref]') as HTMLElement;
-          if (clonable) {
-            clonable.style.position = 'static';
-            clonable.style.visibility = 'visible';
-            clonable.style.left = '0';
-          }
           // Simplify styles for mobile to save memory
           const style = clonedDoc.createElement('style');
-          style.innerHTML = `* { -webkit-print-color-adjust: exact !important; } .glass-card { background: white !important; border: 1px solid #ddd !important; }`;
+          style.innerHTML = `
+            * { -webkit-print-color-adjust: exact !important; font-family: 'Alexandria', sans-serif !important; }
+            .glass-card { background: white !important; border: 1px solid #eee !important; box-shadow: none !important; }
+            img { max-width: 100% !important; }
+          `;
           clonedDoc.head.appendChild(style);
         }
       });
@@ -505,12 +513,23 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       // Restore original style
       element.style.cssText = originalStyle;
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.5); // Fast and memory-efficient
+      const imgData = canvas.toDataURL('image/jpeg', 0.5); 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297), undefined, 'FAST');
+      // Handle multi-page if necessary, though usually we fit it
+      if (pdfHeight > 297) {
+        // Simple scaling to fit height if it's not crazy long
+        if (pdfHeight < 400) {
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, 297, undefined, 'FAST');
+        } else {
+          // If really long, split into two pages or just add as is (might be cropped)
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+        }
+      } else {
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      }
       
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
@@ -520,33 +539,34 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       // Try to use Web Share API first
       if (navigator.share) {
         try {
+          const filesToShare = [pdfFile];
           const shareData: any = {
             title: filename.replace('.pdf', ''),
             text: whatsappMsg,
           };
           
-          // Check if file sharing is supported
-          if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-            shareData.files = [pdfFile];
+          if (navigator.canShare && navigator.canShare({ files: filesToShare })) {
+            shareData.files = filesToShare;
+            await navigator.share(shareData);
+            shared = true;
           }
-          
-          await navigator.share(shareData);
-          shared = true;
         } catch (shareErr: any) {
           console.warn('Sharing failed:', shareErr);
+          // If aborted by user, we consider it "shared/handled"
           if (shareErr.name === 'AbortError') shared = true;
         }
       }
 
-      // If sharing failed or not available, download and WhatsApp
+      // If sharing failed or not available, download and WhatsApp separately
       if (!shared) {
         pdf.save(filename);
-        sendWhatsApp(whatsappMsg);
+        // Short delay to ensure download starts before navigation
+        setTimeout(() => sendWhatsApp(whatsappMsg), 1000);
       }
       
     } catch (err: any) {
       console.error('PDF Generation Error:', err);
-      alert('حدث خطأ أثناء إنشاء الملف. يرجى المحاولة مرة أخرى أو استخدام متصفح مغاير.');
+      alert(`حدث خطأ أثناء تصدير التقرير: ${err.message || 'خطأ غير معروف'}\nيرجى المحاولة من متصفح جوجل كروم أو سفاري.`);
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -1062,6 +1082,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                           src={trip.imageUrl || DEFAULT_TRIP_IMAGES[0]} 
                           alt={trip.name} 
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
