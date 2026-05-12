@@ -475,38 +475,74 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     
     setIsGeneratingPDF(true);
     try {
-      // Ensure element is visible but off-screen
+      // Pre-capture style patching: Replace oklch in all stylesheets to avoid errors in capture
+      const originalStyleTags = Array.from(document.getElementsByTagName('style')).map(s => ({
+        tag: s,
+        content: s.innerHTML
+      }));
+      
+      originalStyleTags.forEach(item => {
+        try {
+          if (item.content.includes('oklch')) {
+            item.tag.innerHTML = item.content.replace(/oklch\([^)]+\)/g, '#777777');
+          }
+        } catch (e) {
+          console.warn('Style patch error', e);
+        }
+      });
+
+      // Prepare element for capture
       const originalStyle = element.style.cssText;
       element.style.position = 'fixed';
-      element.style.left = '-10000px'; 
+      element.style.left = '0'; 
       element.style.top = '0';
       element.style.width = '800px';
+      element.style.height = 'auto'; // Let it grow
       element.style.zIndex = '9999';
       element.style.opacity = '1';
       element.style.visibility = 'visible';
       element.style.display = 'block';
       element.style.pointerEvents = 'none';
+      element.style.transform = 'none';
 
-      // Wait a moment for any dynamic layout to settle
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait a moment for layout and images to load properly
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Use toPng from html-to-image which handles Tailwind 4 (oklch) correctly
+      const canvasHeight = element.scrollHeight || 1500;
+      
+      // Use toPng with explicit dimensions
       const imgData = await toPng(element, {
         quality: 1,
         pixelRatio: 2,
         backgroundColor: '#ffffff',
         width: 800,
+        height: canvasHeight,
         cacheBust: true,
+        style: {
+          transform: 'none',
+          visibility: 'visible',
+          opacity: '1'
+        }
       });
       
-      // Restore original style
+      // Restore original Stylesheet content
+      originalStyleTags.forEach(item => {
+        item.tag.innerHTML = item.content;
+      });
+
+      // Restore original element style
       element.style.cssText = originalStyle;
+
+      if (!imgData || imgData === 'data:,') {
+        throw new Error('فشل التقاط الصورة - يرجى المحاولة مرة أخرى');
+      }
       
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgProps = pdf.getImageProperties(imgData);
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
+      // Add image - if longer than A4, it will just reach the end or we can scale
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       
       // Always save directly to device as requested
