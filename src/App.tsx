@@ -22,6 +22,7 @@ import { Trip, Expense, Settlement, Task, Contribution, GearItem, ItineraryEvent
 import { calculateSettlements } from './utils/calculations';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { 
   Plus, 
   Users, 
@@ -469,6 +470,86 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
   const expensesPrintRef = useRef<HTMLDivElement>(null);
   const tasksPrintRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  const sanitizeOklch = (text: string) => {
+    return text.replace(/oklch\([^)]+\)/g, (match) => {
+      // Branding Colors Mapping for Tailwind 4 default palette
+      if (match.includes('96.27% 0.01 224.43')) return '#ecfdf5'; // emerald-50
+      if (match.includes('92.38% 0.03 89.26')) return '#fffbeb'; // amber-50
+      if (match.includes('51.97% 0.17 162.7')) return '#059669'; // emerald-600
+      if (match.includes('64.44% 0.19 86.84')) return '#f59e0b'; // amber-500
+      if (match.includes('43.14% 0.13 162.7')) return '#047857'; // emerald-700
+      if (match.includes('87.73% 0.01 224.43')) return '#d1fae5'; // emerald-100
+      if (match.includes('58.74% 0.12 162.7')) return '#10b981'; // emerald-500
+      if (match.includes('94.38% 0.02 245.42')) return '#f0f9ff'; // sky-50
+      if (match.includes('48.91% 0.14 245.42')) return '#0284c7'; // sky-600
+      return '#64748b'; // Fallback slate-500
+    });
+  };
+
+  const generateGenericImage = async (originalElement: HTMLElement, filename: string, whatsappMsg: string) => {
+    if (!activeTrip || isGeneratingImage || !originalElement) return;
+    
+    setIsGeneratingImage(true);
+    try {
+      // 1. Capture using toPng
+      // html-to-image is much better with modern CSS (oklch) than html2canvas
+      const dataUrl = await toPng(originalElement, {
+        cacheBust: true,
+        quality: 0.95,
+        backgroundColor: '#ffffff',
+        style: {
+          position: 'static',
+          left: '0',
+          top: '0',
+          visibility: 'visible',
+          display: 'block',
+          opacity: '1',
+          zIndex: '1',
+          width: '850px',
+          padding: '40px'
+        }
+      });
+
+      if (!dataUrl || dataUrl.length < 5000) {
+        throw new Error('فشل التقاط المحتوى - يرجى المحاولة مرة أخرى');
+      }
+
+      // 2. Share/Download logic
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const imageFile = new File([blob], filename, { type: 'image/png' });
+
+      let shared = false;
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+        try {
+          await navigator.share({
+            title: filename.replace('.png', ''),
+            text: whatsappMsg,
+            files: [imageFile]
+          });
+          shared = true;
+        } catch (err: any) {
+          if (err.name === 'AbortError') shared = true;
+        }
+      }
+
+      if (!shared) {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        link.click();
+        sendWhatsApp(whatsappMsg);
+      }
+      
+    } catch (err: any) {
+      console.error('Image Capture Error:', err);
+      alert(`عذراً، حدث خطأ أثناء التصدير كصورة: ${err.message || 'يرجى المحاولة مجدداً'}`);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
   const generateGenericPDF = async (originalElement: HTMLElement, filename: string, whatsappMsg: string) => {
     if (!activeTrip || isGeneratingPDF || !originalElement) return;
@@ -476,28 +557,8 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     setIsGeneratingPDF(true);
     try {
       const printId = originalElement.getAttribute('data-print-id') || 'print-target';
-      
-      // 1. Aggressive Global Style Sanitization
-      // This is necessary because html2canvas fails early when it sees oklch in any stylesheet
       const styleTags = Array.from(document.querySelectorAll('style'));
       const originalContents = styleTags.map(t => t.innerHTML);
-      
-      const sanitizeOklch = (text: string) => {
-        return text.replace(/oklch\([^)]+\)/g, (match) => {
-          // Branding Colors Mapping for Tailwind 4 default palette
-          if (match.includes('96.27% 0.01 224.43')) return '#ecfdf5'; // emerald-50
-          if (match.includes('92.38% 0.03 89.26')) return '#fffbeb'; // amber-50
-          if (match.includes('51.97% 0.17 162.7')) return '#059669'; // emerald-600
-          if (match.includes('64.44% 0.19 86.84')) return '#f59e0b'; // amber-500
-          if (match.includes('43.14% 0.13 162.7')) return '#047857'; // emerald-700
-          if (match.includes('87.73% 0.01 224.43')) return '#d1fae5'; // emerald-100
-          if (match.includes('58.74% 0.12 162.7')) return '#10b981'; // emerald-500
-          if (match.includes('94.38% 0.02 245.42')) return '#f0f9ff'; // sky-50
-          if (match.includes('48.91% 0.14 245.42')) return '#0284c7'; // sky-600
-          
-          return '#64748b'; // Fallback slate-500
-        });
-      };
 
       styleTags.forEach(t => {
         try {
@@ -591,6 +652,41 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     } finally {
       setIsGeneratingPDF(false);
     }
+  };
+
+  const shareReportAsImage = async () => {
+    if (!activeTrip || !reportRef.current) return;
+    const filename = `تقرير_رحلة_${activeTrip.name.replace(/\s+/g, '_')}.png`;
+    const budgetStatus = activeTrip.budget ? `\n📈 الميزانية: ${activeTrip.budget} ريال` : '';
+    const summary = `📊 *تقرير رحلة ${activeTrip.name}*
+💰 إجمالي المصروفات: ${totalSpent} ريال${budgetStatus}
+👥 عدد الأعضاء: ${activeTrip.members.length}
+👤 نصيب الشخص: ${share.toFixed(2)} ريال
+
+_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+    
+    await generateGenericImage(reportRef.current, filename, summary);
+  };
+
+  const shareGearAsImage = async () => {
+    if (!activeTrip || gear.length === 0 || !gearPrintRef.current) return;
+    const filename = `مهام_اعضاء_رحلة_${activeTrip.name}.png`;
+    const summary = `📦 *خلاصة مهام الأعضاء - ${activeTrip.name}*
+${gear.length} مهمة مسجلة.
+
+_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+    await generateGenericImage(gearPrintRef.current, filename, summary);
+  };
+
+  const shareExpensesAsImage = async () => {
+    if (!activeTrip || expenses.length === 0 || !expensesPrintRef.current) return;
+    const filename = `سجل_مصروفات_رحلة_${activeTrip.name}.png`;
+    const summary = `💸 *سجل مصروفات رحلة ${activeTrip.name}*
+إجمالي المصروفات: ${totalSpent} ريال
+عدد المسجل: ${expenses.length} مصروف
+
+_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+    await generateGenericImage(expensesPrintRef.current, filename, summary);
   };
 
   const generatePDF = async () => {
@@ -1193,12 +1289,20 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       <Pencil className="w-4 h-4" /> تغيير الغلاف
                     </button>
                     <button 
+                      onClick={shareReportAsImage} 
+                      disabled={isGeneratingImage} 
+                      className="bg-amber-500/80 hover:bg-amber-500 backdrop-blur-xl text-white px-4 py-2 rounded-2xl transition-all border border-white/20 flex items-center gap-2 text-sm font-bold shadow-lg"
+                    >
+                      {isGeneratingImage ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                      {isGeneratingImage ? 'جاري المعالجة...' : 'مشاركة كصورة'}
+                    </button>
+                    <button 
                       onClick={generatePDF} 
                       disabled={isGeneratingPDF} 
                       className="bg-emerald-500/80 hover:bg-emerald-500 backdrop-blur-xl text-white px-4 py-2 rounded-2xl transition-all border border-white/20 flex items-center gap-2 text-sm font-bold shadow-lg"
                     >
                       {isGeneratingPDF ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
-                      {isGeneratingPDF ? 'جاري التجهيز...' : 'تقرير سريع'}
+                      {isGeneratingPDF ? 'جاري التجهيز...' : 'تقرير PDF'}
                     </button>
                   </div>
 
@@ -1464,22 +1568,31 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       </div>
                     </div>
                     
-                    <button 
-                      onClick={generatePDF} 
-                      disabled={isGeneratingPDF}
-                      className={`w-full py-4 flex items-center justify-center gap-2 rounded-2xl font-bold transition-all ${isGeneratingPDF ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white shadow-lg active:scale-95 hover:bg-emerald-700'}`}
-                    >
-                      {isGeneratingPDF ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
-                          جاري تجهيز PDF...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="w-5 h-5" /> تصدير التقرير النهائي (PDF)
-                        </>
-                      )}
-                    </button>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={shareReportAsImage} 
+                        disabled={isGeneratingImage}
+                        className={`flex-1 py-4 flex items-center justify-center gap-2 rounded-2xl font-bold transition-all shadow-lg active:scale-95 bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50`}
+                      >
+                        <ImageIcon className="w-5 h-5" /> مشاركة كصورة للمجموعة
+                      </button>
+                      <button 
+                        onClick={generatePDF} 
+                        disabled={isGeneratingPDF}
+                        className={`flex-1 py-4 flex items-center justify-center gap-2 rounded-2xl font-bold transition-all ${isGeneratingPDF ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white shadow-lg active:scale-95 hover:bg-emerald-700'}`}
+                      >
+                        {isGeneratingPDF ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
+                            جاري تجهيز PDF...
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-5 h-5" /> تصدير PDF
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <button onClick={shareDeparture} className="w-full btn-secondary py-4 flex items-center justify-center gap-2">
                       <MessageCircle className="w-5 h-5 text-emerald-500" /> إرسال تذكير بالموعد
                     </button>
@@ -1510,12 +1623,22 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       <p className="text-slate-400 text-sm font-bold">إدارة وتتبع كافة التكاليف والمشتريات</p>
                     </div>
                     {expenses.length > 0 && (
-                      <button 
-                        onClick={exportExpensesPDF} 
-                        className="text-emerald-600 font-black px-6 py-3 bg-white border border-emerald-100 rounded-2xl flex items-center gap-2 hover:bg-emerald-50 transition-all shadow-sm"
-                      >
-                        <Download className="w-5 h-5" /> تصدير السجل
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={shareExpensesAsImage} 
+                          disabled={isGeneratingImage}
+                          className="text-amber-600 font-black px-4 py-3 bg-white border border-amber-100 rounded-2xl flex items-center gap-2 hover:bg-amber-50 transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <ImageIcon className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={exportExpensesPDF} 
+                          disabled={isGeneratingPDF}
+                          className="text-emerald-600 font-black px-4 py-3 bg-white border border-emerald-100 rounded-2xl flex items-center gap-2 hover:bg-emerald-50 transition-all shadow-sm"
+                        >
+                          <Download className="w-5 h-5" /> تصدير السجل
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1586,12 +1709,22 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       <p className="text-slate-400 text-sm font-bold">تحديد المسؤوليات وتوفير الأدوات اللازمة</p>
                     </div>
                     {gear.length > 0 && (
-                      <button 
-                        onClick={exportGearPDF} 
-                        className="text-amber-600 font-black px-6 py-3 bg-white border border-amber-100 rounded-2xl flex items-center gap-2 hover:bg-amber-50 transition-all shadow-sm"
-                      >
-                        <Download className="w-5 h-5" /> تصدير PDF
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={shareGearAsImage} 
+                          disabled={isGeneratingImage}
+                          className="text-amber-600 font-black px-4 py-3 bg-white border border-amber-100 rounded-2xl flex items-center gap-2 hover:bg-amber-50 transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <ImageIcon className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={exportGearPDF} 
+                          disabled={isGeneratingPDF}
+                          className="text-slate-600 font-black px-4 py-3 bg-white border border-slate-100 rounded-2xl flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <Download className="w-5 h-5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                   
