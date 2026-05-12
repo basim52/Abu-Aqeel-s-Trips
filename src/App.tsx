@@ -21,7 +21,7 @@ import { auth, db } from './firebase';
 import { Trip, Expense, Settlement, Task, Contribution, GearItem, ItineraryEvent } from './types';
 import { calculateSettlements } from './utils/calculations';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { 
   Plus, 
   Users, 
@@ -475,151 +475,71 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     
     setIsGeneratingPDF(true);
     try {
-      // Ensure element is ready and scrolled to top
-      window.scrollTo(0, 0);
-      
-      // Temporary styling to ensure visibility for capture context
+      // Ensure element is visible but off-screen
       const originalStyle = element.style.cssText;
       element.style.position = 'fixed';
-      element.style.left = '0';
+      element.style.left = '-10000px'; 
       element.style.top = '0';
       element.style.width = '800px';
       element.style.zIndex = '9999';
       element.style.opacity = '1';
       element.style.visibility = 'visible';
+      element.style.display = 'block';
       element.style.pointerEvents = 'none';
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait a moment for any dynamic layout to settle
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      const canvas = await html2canvas(element, {
-        scale: window.innerWidth < 768 ? 0.8 : 1.5, 
-        useCORS: true,
-        logging: false,
+      // Use toPng from html-to-image which handles Tailwind 4 (oklch) correctly
+      const imgData = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2,
         backgroundColor: '#ffffff',
         width: 800,
-        windowWidth: 800,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDoc) => {
-          // Fix for html2canvas not supporting oklch colors (Tailwind 4)
-          // We replace oklch mentions in style tags with a safe fallback to prevent parser crash
-          const styleTags = clonedDoc.getElementsByTagName('style');
-          for (let i = 0; i < styleTags.length; i++) {
-            try {
-              styleTags[i].innerHTML = styleTags[i].innerHTML.replace(/oklch\([^)]+\)/g, '#777');
-            } catch (e) {
-              console.warn('Failed to patch style tag', e);
-            }
-          }
-
-          // Simplify styles for PDF to ensure standard colors and high contrast
-          const style = clonedDoc.createElement('style');
-          style.innerHTML = `
-            * { 
-              -webkit-print-color-adjust: exact !important; 
-              font-family: 'Alexandria', sans-serif !important; 
-            }
-            .glass-card { 
-              background: white !important; 
-              border: 1px solid #e2e8f0 !important; 
-              box-shadow: none !important; 
-            }
-            /* Robust fallbacks for common project colors */
-            .bg-emerald-600 { background-color: #059669 !important; }
-            .bg-emerald-50 { background-color: #ecfdf5 !important; }
-            .text-emerald-600 { color: #059669 !important; }
-            .text-emerald-900 { color: #064e3b !important; }
-            .text-emerald-950 { color: #022c22 !important; }
-            .border-emerald-600 { border-color: #059669 !important; }
-            .bg-amber-500 { background-color: #f59e0b !important; }
-            .bg-amber-600 { background-color: #d97706 !important; }
-            .bg-amber-50 { background-color: #fffbeb !important; }
-            .bg-amber-100 { background-color: #fef3c7 !important; }
-            .border-amber-500 { border-color: #f59e0b !important; }
-            .border-amber-100 { border-color: #fef3c7 !important; }
-            .text-amber-600 { color: #d97706 !important; }
-            .text-amber-700 { color: #b45309 !important; }
-            .text-amber-900 { color: #78350f !important; }
-            .bg-emerald-100 { background-color: #d1fae5 !important; }
-            .text-emerald-700 { color: #047857 !important; }
-            .text-emerald-400 { color: #34d399 !important; }
-            .bg-sky-50 { background-color: #f0f9ff !important; }
-            .bg-sky-100 { background-color: #e0f2fe !important; }
-            .text-sky-600 { color: #0284c7 !important; }
-            .text-sky-700 { color: #0369a1 !important; }
-            .bg-rose-50 { background-color: #fff1f2 !important; }
-            .bg-rose-500 { background-color: #f43f5e !important; }
-            .text-rose-600 { color: #e11d48 !important; }
-            .bg-slate-900 { background-color: #0f172a !important; }
-            .bg-slate-50 { background-color: #f8fafc !important; }
-            .text-slate-400 { color: #94a3b8 !important; }
-            .text-slate-800 { color: #1e293b !important; }
-            .text-slate-900 { color: #0f172a !important; }
-            img { max-width: 100% !important; }
-          `;
-          clonedDoc.head.appendChild(style);
-        }
+        cacheBust: true,
       });
       
       // Restore original style
       element.style.cssText = originalStyle;
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.5); 
       const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      // Handle multi-page if necessary, though usually we fit it
-      if (pdfHeight > 297) {
-        // Simple scaling to fit height if it's not crazy long
-        if (pdfHeight < 400) {
-          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, 297, undefined, 'FAST');
-        } else {
-          // If really long, split into two pages or just add as is (might be cropped)
-          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-        }
-      } else {
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-      }
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       
+      // Always save directly to device as requested
+      pdf.save(filename);
+
+      // Sharing logic
+      let shared = false;
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
-      // Always save to device as requested
-      pdf.save(filename);
-
-      let shared = false;
-      
-      // Try to use Web Share API first
       if (navigator.share) {
         try {
-          const filesToShare = [pdfFile];
-          const shareData: any = {
-            title: filename.replace('.pdf', ''),
-            text: whatsappMsg,
-          };
-          
-          if (navigator.canShare && navigator.canShare({ files: filesToShare })) {
-            shareData.files = filesToShare;
-            await navigator.share(shareData);
+          if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+              title: filename.replace('.pdf', ''),
+              text: whatsappMsg,
+              files: [pdfFile]
+            });
             shared = true;
           }
         } catch (shareErr: any) {
           console.warn('Sharing failed:', shareErr);
-          // If aborted by user, we consider it "shared/handled"
           if (shareErr.name === 'AbortError') shared = true;
         }
       }
 
-      // If sharing was not supported or not handled, fall back to WhatsApp only
-      // (Since download is already triggered above)
       if (!shared) {
         sendWhatsApp(whatsappMsg);
       }
       
     } catch (err: any) {
       console.error('PDF Generation Error:', err);
-      alert(`حدث خطأ أثناء تصدير التقرير: ${err.message || 'خطأ غير معروف'}\nيرجى المحاولة من متصفح جوجل كروم أو سفاري.`);
+      alert(`حدث خطأ أثناء تصدير التقرير: ${err.message || 'خطأ في توليد الملف'}`);
     } finally {
       setIsGeneratingPDF(false);
     }
