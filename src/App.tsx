@@ -151,8 +151,7 @@ export default function App() {
       );
       const unsub = onSnapshot(q, (snapshot) => {
         const trips = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Trip));
-        // Sort in memory to avoid needing a composite index
-        trips.sort((a: any, b: any) => {
+        trips.sort((a, b) => {
           const timeA = a.createdAt?.seconds || 0;
           const timeB = b.createdAt?.seconds || 0;
           return timeB - timeA;
@@ -164,7 +163,30 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (activeTrip) {
+    if (activeTrip && activeTrip.id) {
+      // 1. Specific listener for the active trip itself to catch updates (like departure time)
+      const unsubTrip = onSnapshot(doc(db, 'trips', activeTrip.id), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = { id: docSnap.id, ...docSnap.data() } as Trip;
+          
+          // Use functional update to avoid unnecessary re-runs if data is identical
+          setActiveTrip(prev => {
+            if (!prev) return data;
+            
+            // Check if any visible field changed (simplified comparison)
+            const changed = 
+              prev.name !== data.name ||
+              prev.budget !== data.budget ||
+              prev.departureTime !== data.departureTime ||
+              prev.departureLocation !== data.departureLocation ||
+              prev.locationUrl !== data.locationUrl ||
+              JSON.stringify(prev.members) !== JSON.stringify(data.members);
+            
+            return changed ? data : prev;
+          });
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, `trips/${activeTrip.id}`));
+
       const qExp = query(
         collection(db, 'trips', activeTrip.id, 'expenses'),
         orderBy('createdAt', 'desc')
@@ -197,6 +219,7 @@ export default function App() {
       }, (err) => handleFirestoreError(err, OperationType.GET, `trips/${activeTrip.id}/itinerary`));
 
       return () => {
+        unsubTrip();
         unsubExp();
         unsubTask();
         unsubCont();
@@ -204,7 +227,7 @@ export default function App() {
         unsubItin();
       };
     }
-  }, [activeTrip]);
+  }, [activeTrip?.id]); // Only re-run if the trip ID changes
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
@@ -344,16 +367,16 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
     
     setIsGeneratingPDF(true);
     try {
-      // Ensure element is ready
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Ensure element is ready and scrolled to top
+      window.scrollTo(0, 0);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: window.innerWidth < 768 ? 1.2 : 2, // Lower scale for mobile to save memory
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
         windowWidth: 800,
-        allowTaint: true,
         onclone: (clonedDoc) => {
           const style = clonedDoc.createElement('style');
           style.innerHTML = `
@@ -374,7 +397,7 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
         }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
+      const imgData = canvas.toDataURL('image/jpeg', 0.85); // Slightly lower quality for mobile
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -384,36 +407,38 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      let shared = false;
+      
+      // Try to use Web Share API first
+      if (navigator.share) {
         try {
-          await navigator.share({
-            files: [pdfFile],
-            title: filename.split('.')[0],
-            text: whatsappMsg
-          });
-        } catch (shareErr: any) {
-          if (shareErr.name !== 'AbortError') {
-            pdf.save(filename);
-            sendWhatsApp(whatsappMsg);
+          const shareData: any = {
+            title: filename.replace('.pdf', ''),
+            text: whatsappMsg,
+          };
+          
+          // Check if file sharing is supported
+          if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            shareData.files = [pdfFile];
           }
+          
+          await navigator.share(shareData);
+          shared = true;
+        } catch (shareErr: any) {
+          console.warn('Sharing failed:', shareErr);
+          if (shareErr.name === 'AbortError') shared = true;
         }
-      } else if (navigator.share) {
-        try {
-          pdf.save(filename);
-          await navigator.share({
-            title: filename.split('.')[0],
-            text: whatsappMsg
-          });
-        } catch (err) {
-          sendWhatsApp(whatsappMsg);
-        }
-      } else {
+      }
+
+      // If sharing failed or not available, download and WhatsApp
+      if (!shared) {
         pdf.save(filename);
         sendWhatsApp(whatsappMsg);
       }
-    } catch (err) {
+      
+    } catch (err: any) {
       console.error('PDF Generation Error:', err);
-      alert('حدث خطأ أثناء إنشاء التقرير.');
+      alert('حدث خطأ أثناء إنشاء الملف. يرجى المحاولة مرة أخرى أو استخدام متصفح مغاير.');
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -478,7 +503,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       await setDoc(doc(db, 'trips', activeTrip.id), {
         departureTime: depTime,
         departureLocation: depLoc,
-        locationUrl: depUrl,
+        locationUrl: depUrl || '',
         updatedAt: serverTimestamp()
       }, { merge: true });
       setShowDepartureModal(false);
