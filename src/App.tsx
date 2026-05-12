@@ -40,6 +40,8 @@ import {
   MapPin,
   CheckCircle2,
   Circle,
+  Backpack,
+  ArrowLeft,
   X,
   Utensils,
   Fuel,
@@ -499,11 +501,60 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
         scrollX: 0,
         scrollY: 0,
         onclone: (clonedDoc) => {
-          // Simplify styles for mobile to save memory
+          // Fix for html2canvas not supporting oklch colors (Tailwind 4)
+          // We replace oklch mentions in style tags with a safe fallback to prevent parser crash
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            try {
+              styleTags[i].innerHTML = styleTags[i].innerHTML.replace(/oklch\([^)]+\)/g, '#777');
+            } catch (e) {
+              console.warn('Failed to patch style tag', e);
+            }
+          }
+
+          // Simplify styles for PDF to ensure standard colors and high contrast
           const style = clonedDoc.createElement('style');
           style.innerHTML = `
-            * { -webkit-print-color-adjust: exact !important; font-family: 'Alexandria', sans-serif !important; }
-            .glass-card { background: white !important; border: 1px solid #eee !important; box-shadow: none !important; }
+            * { 
+              -webkit-print-color-adjust: exact !important; 
+              font-family: 'Alexandria', sans-serif !important; 
+            }
+            .glass-card { 
+              background: white !important; 
+              border: 1px solid #e2e8f0 !important; 
+              box-shadow: none !important; 
+            }
+            /* Robust fallbacks for common project colors */
+            .bg-emerald-600 { background-color: #059669 !important; }
+            .bg-emerald-50 { background-color: #ecfdf5 !important; }
+            .text-emerald-600 { color: #059669 !important; }
+            .text-emerald-900 { color: #064e3b !important; }
+            .text-emerald-950 { color: #022c22 !important; }
+            .border-emerald-600 { border-color: #059669 !important; }
+            .bg-amber-500 { background-color: #f59e0b !important; }
+            .bg-amber-600 { background-color: #d97706 !important; }
+            .bg-amber-50 { background-color: #fffbeb !important; }
+            .bg-amber-100 { background-color: #fef3c7 !important; }
+            .border-amber-500 { border-color: #f59e0b !important; }
+            .border-amber-100 { border-color: #fef3c7 !important; }
+            .text-amber-600 { color: #d97706 !important; }
+            .text-amber-700 { color: #b45309 !important; }
+            .text-amber-900 { color: #78350f !important; }
+            .bg-emerald-100 { background-color: #d1fae5 !important; }
+            .text-emerald-700 { color: #047857 !important; }
+            .text-emerald-400 { color: #34d399 !important; }
+            .bg-sky-50 { background-color: #f0f9ff !important; }
+            .bg-sky-100 { background-color: #e0f2fe !important; }
+            .text-sky-600 { color: #0284c7 !important; }
+            .text-sky-700 { color: #0369a1 !important; }
+            .bg-rose-50 { background-color: #fff1f2 !important; }
+            .bg-rose-500 { background-color: #f43f5e !important; }
+            .text-rose-600 { color: #e11d48 !important; }
+            .bg-slate-900 { background-color: #0f172a !important; }
+            .bg-slate-50 { background-color: #f8fafc !important; }
+            .text-slate-400 { color: #94a3b8 !important; }
+            .text-slate-800 { color: #1e293b !important; }
+            .text-slate-900 { color: #0f172a !important; }
             img { max-width: 100% !important; }
           `;
           clonedDoc.head.appendChild(style);
@@ -534,6 +585,9 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
+      // Always save to device as requested
+      pdf.save(filename);
+
       let shared = false;
       
       // Try to use Web Share API first
@@ -557,11 +611,10 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
         }
       }
 
-      // If sharing failed or not available, download and WhatsApp separately
+      // If sharing was not supported or not handled, fall back to WhatsApp only
+      // (Since download is already triggered above)
       if (!shared) {
-        pdf.save(filename);
-        // Short delay to ensure download starts before navigation
-        setTimeout(() => sendWhatsApp(whatsappMsg), 1000);
+        sendWhatsApp(whatsappMsg);
       }
       
     } catch (err: any) {
