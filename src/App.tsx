@@ -21,7 +21,7 @@ import { auth, db } from './firebase';
 import { Trip, Expense, Settlement, Task, Contribution, GearItem, ItineraryEvent } from './types';
 import { calculateSettlements } from './utils/calculations';
 import jsPDF from 'jspdf';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { 
   Plus, 
   Users, 
@@ -470,102 +470,88 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
   const tasksPrintRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const generateGenericPDF = async (element: HTMLElement, filename: string, whatsappMsg: string) => {
-    if (!activeTrip || isGeneratingPDF) return;
+  const generateGenericPDF = async (originalElement: HTMLElement, filename: string, whatsappMsg: string) => {
+    if (!activeTrip || isGeneratingPDF || !originalElement) return;
     
     setIsGeneratingPDF(true);
     try {
-      // Pre-capture style patching: Replace oklch in all stylesheets to avoid errors in capture
-      const originalStyleTags = Array.from(document.getElementsByTagName('style')).map(s => ({
-        tag: s,
-        content: s.innerHTML
-      }));
-      
-      originalStyleTags.forEach(item => {
-        try {
-          if (item.content.includes('oklch')) {
-            item.tag.innerHTML = item.content.replace(/oklch\([^)]+\)/g, '#777777');
-          }
-        } catch (e) {
-          console.warn('Style patch error', e);
-        }
-      });
+      // 1. Prepare for capture: Create a dedicated capture container
+      const captureContainer = document.createElement('div');
+      captureContainer.style.position = 'fixed';
+      captureContainer.style.left = '-10000px'; 
+      captureContainer.style.top = '0';
+      captureContainer.style.width = '1200px'; 
+      captureContainer.style.backgroundColor = '#ffffff';
+      captureContainer.style.direction = 'rtl'; // Maintain RTL for Arabic
+      document.body.appendChild(captureContainer);
 
-      // Prepare element for capture
-      const originalStyle = element.style.cssText;
-      element.style.position = 'fixed';
-      element.style.left = '0'; 
-      element.style.top = '0';
-      element.style.width = '800px';
-      element.style.height = 'auto'; // Let it grow
-      element.style.zIndex = '9999';
-      element.style.opacity = '1';
-      element.style.visibility = 'visible';
+      // Clone the element and clean it up for printing
+      const element = originalElement.cloneNode(true) as HTMLElement;
       element.style.display = 'block';
-      element.style.pointerEvents = 'none';
-      element.style.transform = 'none';
+      element.style.visibility = 'visible';
+      element.style.opacity = '1';
+      element.style.position = 'relative';
+      element.style.width = '100%';
+      element.style.margin = '0';
+      element.style.padding = '50px';
+      
+      captureContainer.appendChild(element);
 
-      // Wait a moment for layout and images to load properly
+      // Wait for layout and fonts
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const canvasHeight = element.scrollHeight || 1500;
-      
-      // Use toPng with explicit dimensions
-      const imgData = await toPng(element, {
-        quality: 1,
-        pixelRatio: 2,
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
-        width: 800,
-        height: canvasHeight,
-        cacheBust: true,
-        style: {
-          transform: 'none',
-          visibility: 'visible',
-          opacity: '1'
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Replace modern Tailwind 4 colors (oklch) that canvas engines can't parse
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            styleTags[i].innerHTML = styleTags[i].innerHTML.replace(/oklch\([^)]+\)/g, (match) => {
+              if (match.includes('96.27% 0.01 224.43')) return '#ecfdf5'; // emerald-50
+              if (match.includes('51.97% 0.17 162.7')) return '#059669'; // emerald-600
+              if (match.includes('64.44% 0.19 86.84')) return '#f59e0b'; // amber-500
+              if (match.includes('92.38% 0.03 89.26')) return '#fffbeb'; // amber-50
+              if (match.includes('0% 0 0')) return '#000000'; // black
+              if (match.includes('100% 0 0')) return '#ffffff'; // white
+              if (match.includes('43.14% 0.13 162.7')) return '#047857'; // emerald-700
+              return '#666666'; // general fallback
+            });
+          }
         }
       });
-      
-      // Restore original Stylesheet content
-      originalStyleTags.forEach(item => {
-        item.tag.innerHTML = item.content;
-      });
 
-      // Restore original element style
-      element.style.cssText = originalStyle;
+      // Cleanup capture container
+      document.body.removeChild(captureContainer);
 
-      if (!imgData || imgData === 'data:,') {
-        throw new Error('فشل التقاط الصورة - يرجى المحاولة مرة أخرى');
-      }
-      
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      // Add image - if longer than A4, it will just reach the end or we can scale
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       
-      // Always save directly to device as requested
+      // Save directly to device
       pdf.save(filename);
 
-      // Sharing logic
-      let shared = false;
+      // Share via Web Share if possible
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
-      if (navigator.share) {
+      let shared = false;
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
         try {
-          if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-            await navigator.share({
-              title: filename.replace('.pdf', ''),
-              text: whatsappMsg,
-              files: [pdfFile]
-            });
-            shared = true;
-          }
-        } catch (shareErr: any) {
-          console.warn('Sharing failed:', shareErr);
-          if (shareErr.name === 'AbortError') shared = true;
+          await navigator.share({
+            title: filename.replace('.pdf', ''),
+            text: whatsappMsg,
+            files: [pdfFile]
+          });
+          shared = true;
+        } catch (err: any) {
+          if (err.name === 'AbortError') shared = true;
         }
       }
 
@@ -574,8 +560,8 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       }
       
     } catch (err: any) {
-      console.error('PDF Generation Error:', err);
-      alert(`حدث خطأ أثناء تصدير التقرير: ${err.message || 'خطأ في توليد الملف'}`);
+      console.error('PDF Export Error:', err);
+      alert(`حدث خطأ أثناء تصدير الملف: ${err.message || 'خطأ فني'}`);
     } finally {
       setIsGeneratingPDF(false);
     }
