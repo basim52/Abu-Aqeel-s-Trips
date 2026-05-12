@@ -46,7 +46,8 @@ import {
   Package,
   ShoppingBag,
   Download,
-  Calendar
+  Calendar,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -103,6 +104,10 @@ export default function App() {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [newBudget, setNewBudget] = useState('');
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingGearId, setEditingGearId] = useState<string | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [userTrips, setUserTrips] = useState<Trip[]>([]);
 
   // Form states
@@ -252,20 +257,41 @@ export default function App() {
     if (!activeTrip || !newExpenseDesc || !newExpenseAmount || !newExpensePayer) return;
 
     try {
-      await addDoc(collection(db, 'trips', activeTrip.id, 'expenses'), {
+      const expenseData = {
         description: newExpenseDesc,
         amount: parseFloat(newExpenseAmount),
         paidBy: newExpensePayer,
         category: newExpenseCategory,
-        createdAt: serverTimestamp()
-      });
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingExpenseId) {
+        await setDoc(doc(db, 'trips', activeTrip.id, 'expenses', editingExpenseId), expenseData, { merge: true });
+      } else {
+        await addDoc(collection(db, 'trips', activeTrip.id, 'expenses'), {
+          ...expenseData,
+          createdAt: serverTimestamp()
+        });
+      }
+      
       setShowAddExpenseModal(false);
+      setEditingExpenseId(null);
       setNewExpenseDesc('');
       setNewExpenseAmount('');
       setNewExpenseCategory('other');
+      setNewExpensePayer('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `trips/${activeTrip.id}/expenses`);
+      handleFirestoreError(err, editingExpenseId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/expenses`);
     }
+  };
+
+  const startEditExpense = (e: Expense) => {
+    setEditingExpenseId(e.id);
+    setNewExpenseDesc(e.description);
+    setNewExpenseAmount(e.amount.toString());
+    setNewExpensePayer(e.paidBy);
+    setNewExpenseCategory(e.category || 'other');
+    setShowAddExpenseModal(true);
   };
 
   const sendWhatsApp = (message: string, phone?: string) => {
@@ -308,28 +334,44 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
   };
 
   const reportRef = useRef<HTMLDivElement>(null);
+  const gearPrintRef = useRef<HTMLDivElement>(null);
+  const expensesPrintRef = useRef<HTMLDivElement>(null);
+  const tasksPrintRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const generatePDF = async () => {
-    if (!activeTrip || !reportRef.current || isGeneratingPDF) return;
+  const generateGenericPDF = async (element: HTMLElement, filename: string, whatsappMsg: string) => {
+    if (!activeTrip || isGeneratingPDF) return;
     
     setIsGeneratingPDF(true);
     try {
-      const reportElement = reportRef.current;
-      
-      // Ensure element is ready and scrolled to top
-      reportElement.scrollTop = 0;
-      
-      // Wait for font rendering
+      // Ensure element is ready
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      const canvas = await html2canvas(reportElement, {
+      const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
         windowWidth: 800,
-        allowTaint: true
+        allowTaint: true,
+        onclone: (clonedDoc) => {
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * { color-scheme: light !important; }
+            .text-emerald-900 { color: #064e3b !important; }
+            .text-emerald-600 { color: #059669 !important; }
+            .bg-emerald-600 { background-color: #059669 !important; }
+            .bg-emerald-50 { background-color: #ecfdf5 !important; }
+            .border-emerald-600 { border-color: #059669 !important; }
+            .text-slate-800 { color: #1e293b !important; }
+            .text-slate-500 { color: #64748b !important; }
+            .bg-slate-100 { background-color: #f1f5f9 !important; }
+            .border-slate-200 { border-color: #e2e8f0 !important; }
+            .text-amber-700 { color: #b45309 !important; }
+            .bg-amber-100 { background-color: #fef3c7 !important; }
+          `;
+          clonedDoc.head.appendChild(style);
+        }
       });
       
       const imgData = canvas.toDataURL('image/jpeg', 0.9);
@@ -339,12 +381,49 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       
-      const filename = `تقرير_رحلة_${activeTrip.name.replace(/\s+/g, '_')}.pdf`;
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
-      const budgetStatus = activeTrip.budget ? `\n📈 الميزانية: ${activeTrip.budget} ريال (${((totalSpent / activeTrip.budget) * 100).toFixed(0)}%)` : '';
-      const summary = `📊 *تقرير رحلة ${activeTrip.name}*
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            files: [pdfFile],
+            title: filename.split('.')[0],
+            text: whatsappMsg
+          });
+        } catch (shareErr: any) {
+          if (shareErr.name !== 'AbortError') {
+            pdf.save(filename);
+            sendWhatsApp(whatsappMsg);
+          }
+        }
+      } else if (navigator.share) {
+        try {
+          pdf.save(filename);
+          await navigator.share({
+            title: filename.split('.')[0],
+            text: whatsappMsg
+          });
+        } catch (err) {
+          sendWhatsApp(whatsappMsg);
+        }
+      } else {
+        pdf.save(filename);
+        sendWhatsApp(whatsappMsg);
+      }
+    } catch (err) {
+      console.error('PDF Generation Error:', err);
+      alert('حدث خطأ أثناء إنشاء التقرير.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const generatePDF = async () => {
+    if (!activeTrip || !reportRef.current) return;
+    const filename = `تقرير_رحلة_${activeTrip.name.replace(/\s+/g, '_')}.pdf`;
+    const budgetStatus = activeTrip.budget ? `\n📈 الميزانية: ${activeTrip.budget} ريال (${((totalSpent / activeTrip.budget) * 100).toFixed(0)}%)` : '';
+    const summary = `📊 *تقرير رحلة ${activeTrip.name}*
 💰 إجمالي المصروفات: ${totalSpent} ريال${budgetStatus}
 👥 عدد الأعضاء: ${activeTrip.members.length}
 👤 نصيب الشخص: ${share.toFixed(2)} ريال
@@ -353,76 +432,44 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
 ${settlements.map(s => `• ${s.from} ⬅️ ${s.to}: ${s.amount} ريال`).join('\n')}
 
 _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
-
-      // Priority 1: Web Share API (File)
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        try {
-          await navigator.share({
-            files: [pdfFile],
-            title: `تقرير رحلة ${activeTrip.name}`,
-            text: summary
-          });
-        } catch (shareErr: any) {
-          if (shareErr.name !== 'AbortError') {
-            pdf.save(filename);
-            sendWhatsApp(summary);
-          }
-        }
-      } 
-      // Priority 2: Web Share API (Text/Link if File fails)
-      else if (navigator.share) {
-        try {
-          pdf.save(filename);
-          await navigator.share({
-            title: `تقرير رحلة ${activeTrip.name}`,
-            text: summary
-          });
-        } catch (err) {
-          sendWhatsApp(summary);
-        }
-      }
-      // Fallback: Download + WhatsApp Link
-      else {
-        pdf.save(filename);
-        sendWhatsApp(summary);
-      }
-      
-    } catch (err) {
-      console.error('PDF Generation Error:', err);
-      alert('حدث خطأ أثناء إنشاء التقرير. تأكد من ثبات الاتصال.');
-    } finally {
-      setIsGeneratingPDF(false);
-    }
+    
+    await generateGenericPDF(reportRef.current, filename, summary);
   };
 
-  const exportGearCSV = () => {
-    if (!activeTrip || gear.length === 0) return;
+  const exportGearPDF = async () => {
+    if (!activeTrip || gear.length === 0 || !gearPrintRef.current) return;
     
-    // Arabic characters in CSV need BOM for Excel to recognize UTF-8
-    const headers = ['الأداة', 'الموفر', 'الحالة'];
-    const rows = gear.map(item => [
-      item.name,
-      item.provider || 'الجميع',
-      item.status === 'available' ? 'جاهز' : 'نحتاجه'
-    ]);
-    
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-    
-    const blob = new Blob([`\ufeff${csvContent}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `عزبة_${activeTrip.name}.csv`;
-    link.click();
-
-    // Also send as WhatsApp message for quick sharing
-    const gearSummary = `📦 *قائمة مهام اعضاء الرحلة - ${activeTrip.name}*
+    const filename = `مهام_اعضاء_رحلة_${activeTrip.name}.pdf`;
+    const summary = `📦 *قائمة مهام اعضاء الرحلة - ${activeTrip.name}*
 ${gear.map(item => `${item.status === 'available' ? '✅' : '⏳'} ${item.name} (${item.provider || 'الجميع'})`).join('\n')}
 
 _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
-    sendWhatsApp(gearSummary);
+
+    await generateGenericPDF(gearPrintRef.current, filename, summary);
+  };
+
+  const exportExpensesPDF = async () => {
+    if (!activeTrip || expenses.length === 0 || !expensesPrintRef.current) return;
+    
+    const filename = `مصروفات_رحلة_${activeTrip.name}.pdf`;
+    const summary = `💰 *سجل مصروفات رحلة ${activeTrip.name}*
+إجمالي المصروفات: ${totalSpent} ريال
+
+_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+
+    await generateGenericPDF(expensesPrintRef.current, filename, summary);
+  };
+
+  const exportTasksPDF = async () => {
+    if (!activeTrip || tasks.length === 0 || !tasksPrintRef.current) return;
+    
+    const filename = `مهام_تحضير_رحلة_${activeTrip.name}.pdf`;
+    const summary = `📋 *مهام تحضير رحلة ${activeTrip.name}*
+${tasks.map(t => `${t.status === 'completed' ? '✅' : '⏳'} ${t.title} (@${t.assignedTo})`).join('\n')}
+
+_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+
+    await generateGenericPDF(tasksPrintRef.current, filename, summary);
   };
 
   const updateDeparture = async () => {
@@ -529,16 +576,35 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
   const addTask = async () => {
     if (!activeTrip || !newTaskTitle || !newTaskAssignee) return;
     try {
-      await addDoc(collection(db, 'trips', activeTrip.id, 'tasks'), {
+      const taskData = {
         title: newTaskTitle,
         assignedTo: newTaskAssignee,
-        completed: false
-      });
+      };
+
+      if (editingTaskId) {
+        await setDoc(doc(db, 'trips', activeTrip.id, 'tasks', editingTaskId), taskData, { merge: true });
+      } else {
+        await addDoc(collection(db, 'trips', activeTrip.id, 'tasks'), {
+          ...taskData,
+          completed: false,
+          createdAt: serverTimestamp()
+        });
+      }
+      
       setShowAddTaskModal(false);
+      setEditingTaskId(null);
       setNewTaskTitle('');
+      setNewTaskAssignee('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `trips/${activeTrip.id}/tasks`);
+      handleFirestoreError(err, editingTaskId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/tasks`);
     }
+  };
+
+  const startEditTask = (t: Task) => {
+    setEditingTaskId(t.id);
+    setNewTaskTitle(t.title);
+    setNewTaskAssignee(t.assignedTo);
+    setShowAddTaskModal(true);
   };
 
   const toggleTask = async (task: Task) => {
@@ -571,16 +637,33 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
   const addGearItem = async () => {
     if (!activeTrip || !newGearName) return;
     try {
-      await addDoc(collection(db, 'trips', activeTrip.id, 'gear'), {
+      const gearData = {
         name: newGearName,
         provider: newGearProvider,
-        status: 'needed'
-      });
+      };
+
+      if (editingGearId) {
+        await setDoc(doc(db, 'trips', activeTrip.id, 'gear', editingGearId), gearData, { merge: true });
+      } else {
+        await addDoc(collection(db, 'trips', activeTrip.id, 'gear'), {
+          ...gearData,
+          status: 'needed',
+          createdAt: serverTimestamp()
+        });
+      }
+      
+      setEditingGearId(null);
       setNewGearName('');
       setNewGearProvider('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `trips/${activeTrip.id}/gear`);
+      handleFirestoreError(err, editingGearId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/gear`);
     }
+  };
+
+  const startEditGear = (item: GearItem) => {
+    setEditingGearId(item.id);
+    setNewGearName(item.name);
+    setNewGearProvider(item.provider || '');
   };
 
   const toggleGear = async (item: GearItem) => {
@@ -597,15 +680,32 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
   const addItineraryEvent = async () => {
     if (!activeTrip || !newEventDesc || !newEventTime) return;
     try {
-      await addDoc(collection(db, 'trips', activeTrip.id, 'itinerary'), {
+      const eventData = {
         time: newEventTime,
         description: newEventDesc
-      });
+      };
+
+      if (editingEventId) {
+        await setDoc(doc(db, 'trips', activeTrip.id, 'itinerary', editingEventId), eventData, { merge: true });
+      } else {
+        await addDoc(collection(db, 'trips', activeTrip.id, 'itinerary'), {
+          ...eventData,
+          createdAt: serverTimestamp()
+        });
+      }
+      
+      setEditingEventId(null);
       setNewEventTime('');
       setNewEventDesc('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `trips/${activeTrip.id}/itinerary`);
+      handleFirestoreError(err, editingEventId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/itinerary`);
     }
+  };
+
+  const startEditEvent = (e: ItineraryEvent) => {
+    setEditingEventId(e.id);
+    setNewEventTime(e.time);
+    setNewEventDesc(e.description);
   };
 
   const deleteTrip = async (tripId: string, e?: React.MouseEvent) => {
@@ -1107,7 +1207,17 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                   <Plus className="w-6 h-6 bg-white/20 rounded-lg p-1" /> إضافة مصروف جديد
                 </button>
                 <section className="space-y-4">
+                  <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold">سجل المصروفات</h3>
+                  {expenses.length > 0 && (
+                    <button 
+                      onClick={exportExpensesPDF} 
+                      className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl flex items-center gap-2 hover:bg-emerald-100 transition-all text-sm"
+                    >
+                      <Download className="w-4 h-4" /> تصدير PDF
+                    </button>
+                  )}
+                </div>
                   <div className="space-y-3">
                     {expenses.map(e => (
                       <div key={e.id} className="glass-card p-5 flex items-center justify-between border-r-4 border-emerald-600">
@@ -1128,12 +1238,20 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                             <span className="text-lg font-black text-slate-800">{e.amount}</span>
                             <span className="text-[10px] text-slate-400 block uppercase">ريال</span>
                           </div>
-                          <button 
-                            onClick={() => deleteExpense(e.id)} 
-                            className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <button 
+                              onClick={() => startEditExpense(e)} 
+                              className="p-2 text-slate-200 hover:text-emerald-500 transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => deleteExpense(e.id)} 
+                              className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1150,10 +1268,10 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                     <h3 className="text-xl font-bold">تجهيز مهام اعضاء الرحلة (الأدوات)</h3>
                     {gear.length > 0 && (
                       <button 
-                        onClick={exportGearCSV} 
+                        onClick={exportGearPDF} 
                         className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl flex items-center gap-2 hover:bg-emerald-100 transition-all text-sm"
                       >
-                        <Download className="w-4 h-4" /> تصدير القائمة
+                        <Download className="w-4 h-4" /> تصدير PDF
                       </button>
                     )}
                   </div>
@@ -1163,9 +1281,24 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       <option value="">من الموفر؟</option>
                       {activeTrip.members.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
-                    <button onClick={addGearItem} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2">
-                       <Plus className="w-5 h-5" /> إضافة للمهمة
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={addGearItem} className={`${editingGearId ? 'bg-amber-600' : 'bg-emerald-600'} text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 flex-1`}>
+                        {editingGearId ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                        {editingGearId ? 'تعديل المهمة' : 'إضافة للمهمة'}
+                      </button>
+                      {editingGearId && (
+                        <button 
+                          onClick={() => {
+                            setEditingGearId(null);
+                            setNewGearName('');
+                            setNewGearProvider('');
+                          }} 
+                          className="bg-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold"
+                        >
+                          إلغاء
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1185,12 +1318,20 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                         <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${item.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                           {item.status === 'available' ? 'جاهز' : 'نحتاجه'}
                         </span>
-                        <button 
-                          onClick={() => deleteGearItem(item.id)} 
-                          className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex flex-col gap-1">
+                          <button 
+                            onClick={() => startEditGear(item)} 
+                            className="p-2 text-slate-200 hover:text-emerald-500 transition-colors"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => deleteGearItem(item.id)} 
+                            className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1201,6 +1342,14 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between border-r-4 border-emerald-600 pr-3 gap-3">
                     <h3 className="text-xl font-bold italic">مهام التحضير</h3>
                     <div className="flex gap-2">
+                      {pendingTasks.length > 0 && (
+                        <button 
+                          onClick={exportTasksPDF} 
+                          className="text-emerald-600 font-bold px-4 py-2 bg-emerald-50 rounded-xl flex items-center gap-2 hover:bg-emerald-100 transition-all text-sm"
+                        >
+                          <Download className="w-4 h-4" /> تصدير PDF
+                        </button>
+                      )}
                       {pendingTasks.length > 0 && (
                         <button 
                           onClick={sendAllTasksReminder} 
@@ -1243,6 +1392,12 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                             <div className="flex items-center gap-2">
                               <button onClick={() => shareTask(t)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-all">
                                 <MessageCircle className="w-5 h-5" />
+                              </button>
+                              <button 
+                                onClick={() => startEditTask(t)} 
+                                className="p-2 text-slate-200 hover:text-emerald-500 transition-all"
+                              >
+                                <Pencil className="w-4 h-4" />
                               </button>
                               <button onClick={() => deleteTask(t.id)} className="p-2 text-slate-200 hover:text-rose-500 transition-all">
                                 <Trash2 className="w-4 h-4" />
@@ -1301,9 +1456,24 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input type="text" placeholder="الوقت (مثلاً: 2م)" className="sm:w-32 border p-3 rounded-xl text-center font-bold" value={newEventTime} onChange={e => setNewEventTime(e.target.value)} />
                     <input type="text" placeholder="وصف الفعالية.." className="flex-1 border p-3 rounded-xl" value={newEventDesc} onChange={e => setNewEventDesc(e.target.value)} />
-                    <button onClick={addItineraryEvent} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2">
-                       <Plus className="w-5 h-5" /> إضافة
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={addItineraryEvent} className={`${editingEventId ? 'bg-amber-600' : 'bg-emerald-600'} text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 flex-1`}>
+                        {editingEventId ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                        {editingEventId ? 'تعديل' : 'إضافة'}
+                      </button>
+                      {editingEventId && (
+                        <button 
+                          onClick={() => {
+                            setEditingEventId(null);
+                            setNewEventTime('');
+                            setNewEventDesc('');
+                          }} 
+                          className="bg-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold"
+                        >
+                          إلغاء
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1314,12 +1484,20 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                       <div className="glass-card p-4 flex justify-between items-center bg-white/50 hover:bg-white transition-colors">
                         <span className="font-mono text-emerald-600 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg text-sm border border-emerald-100">{event.time}</span>
                         <p className="font-bold text-slate-800 text-right flex-1 px-4">{event.description}</p>
-                        <button 
-                          onClick={() => deleteItineraryEvent(event.id)} 
-                          className="p-2 text-slate-200 hover:text-rose-500 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => startEditEvent(event)} 
+                            className="p-2 text-slate-200 hover:text-emerald-500 transition-all"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => deleteItineraryEvent(event.id)} 
+                            className="p-2 text-slate-200 hover:text-rose-500 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1369,9 +1547,24 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
 
         {showAddExpenseModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAddExpenseModal(false)} />
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => {
+              setShowAddExpenseModal(false);
+              setEditingExpenseId(null);
+              setNewExpenseDesc('');
+              setNewExpenseAmount('');
+              setNewExpensePayer('');
+            }} />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-4 text-right">
-              <h2 className="text-2xl font-bold">إضافة مصروف</h2>
+              <div className="flex justify-between items-center border-b pb-4">
+                <button onClick={() => {
+                  setShowAddExpenseModal(false);
+                  setEditingExpenseId(null);
+                  setNewExpenseDesc('');
+                  setNewExpenseAmount('');
+                  setNewExpensePayer('');
+                }} className="text-slate-400 p-1"><X className="w-6 h-6" /></button>
+                <h2 className="text-2xl font-bold">{editingExpenseId ? 'تعديل المصروف' : 'إضافة مصروف'}</h2>
+              </div>
               <input type="text" placeholder="الوصف" className="w-full border p-3 rounded-xl" value={newExpenseDesc} onChange={e => setNewExpenseDesc(e.target.value)} />
               <input type="number" placeholder="المبلغ" className="w-full border p-3 rounded-xl" value={newExpenseAmount} onChange={e => setNewExpenseAmount(e.target.value)} />
               <select className="w-full border p-3 rounded-xl" value={newExpensePayer} onChange={e => setNewExpensePayer(e.target.value)}>
@@ -1392,22 +1585,39 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                   <option value="other">🛍️ أخرى</option>
                 </select>
               </div>
-              <button onClick={addExpense} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold">حفظ المصروف</button>
+              <button onClick={addExpense} className={`w-full ${editingExpenseId ? 'bg-amber-600' : 'bg-emerald-600'} text-white py-4 rounded-xl font-bold`}>
+                {editingExpenseId ? 'تعديل المصروف' : 'حفظ المصروف'}
+              </button>
             </motion.div>
           </div>
         )}
 
         {showAddTaskModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAddTaskModal(false)} />
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => {
+              setShowAddTaskModal(false);
+              setEditingTaskId(null);
+              setNewTaskTitle('');
+              setNewTaskAssignee('');
+            }} />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white p-8 rounded-3xl w-full max-w-md relative z-10 space-y-4 text-right">
-              <h2 className="text-2xl font-bold">إضافة مهمة</h2>
+              <div className="flex justify-between items-center border-b pb-4">
+                <button onClick={() => {
+                  setShowAddTaskModal(false);
+                  setEditingTaskId(null);
+                  setNewTaskTitle('');
+                  setNewTaskAssignee('');
+                }} className="text-slate-400 p-1"><X className="w-6 h-6" /></button>
+                <h2 className="text-2xl font-bold">{editingTaskId ? 'تعديل المهمة' : 'إضافة مهمة'}</h2>
+              </div>
               <input type="text" placeholder="الغرض / المهمة" className="w-full border p-3 rounded-xl" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} />
               <select className="w-full border p-3 rounded-xl" value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}>
                 <option value="">المسؤول؟</option>
                 {activeTrip?.members.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
-              <button onClick={addTask} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold">حفظ</button>
+              <button onClick={addTask} className={`w-full ${editingTaskId ? 'bg-amber-600' : 'bg-emerald-600'} text-white py-4 rounded-xl font-bold`}>
+                {editingTaskId ? 'تعديل' : 'حفظ'}
+              </button>
             </motion.div>
           </div>
         )}
@@ -1727,7 +1937,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
               </div>
               <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
                 <div 
-                  className={`h-full ${totalSpent > activeTrip.budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                   className={`h-full ${totalSpent > activeTrip.budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
                   style={{ width: `${Math.min((totalSpent / activeTrip.budget) * 100, 100)}%` }}
                 />
               </div>
@@ -1813,6 +2023,117 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
            <div className="text-left font-bold text-slate-400 italic text-sm">
               صدر عبر التطبيق الذكي لإدارة الرحلات والمصاريف
            </div>
+        </div>
+      </div>
+
+      {/* Hidden Gear Report */}
+      <div 
+        ref={gearPrintRef} 
+        style={{ position: 'fixed', left: '-10000px', top: 0, width: '210mm', minHeight: '297mm', padding: '20mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000, boxSizing: 'border-box' }}
+        className="rtl"
+        dir="rtl"
+      >
+        <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex justify-between items-end">
+          <h2 className="text-3xl font-black text-emerald-900">قائمة مهام أعضاء الرحلة</h2>
+          <p className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-xl text-sm font-bold">{activeTrip?.name}</p>
+        </div>
+        <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+          <table className="w-full text-right border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-sm">
+                <th className="p-4 border-b">الحالة</th>
+                <th className="p-4 border-b">المهمة/الأداة</th>
+                <th className="p-4 border-b">الموفر/المسؤول</th>
+              </tr>
+            </thead>
+            <tbody>
+              {gear.map((item, i) => (
+                <tr key={i} className="border-b border-slate-50">
+                  <td className="p-4 text-sm font-bold">
+                    <span className={item.status === 'available' ? 'text-emerald-600' : 'text-amber-600'}>
+                      {item.status === 'available' ? '✅ جاهز' : '⏳ نحتاجه'}
+                    </span>
+                  </td>
+                  <td className="p-4 font-bold text-slate-800">{item.name}</td>
+                  <td className="p-4 text-slate-500">{item.provider || 'الجميع'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Hidden Expenses Report */}
+      <div 
+        ref={expensesPrintRef} 
+        style={{ position: 'fixed', left: '-10000px', top: 0, width: '210mm', minHeight: '297mm', padding: '20mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000, boxSizing: 'border-box' }}
+        className="rtl"
+        dir="rtl"
+      >
+        <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex justify-between items-end">
+          <h2 className="text-3xl font-black text-emerald-900">سجل مصروفات الرحلة</h2>
+          <p className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-xl text-sm font-bold">{activeTrip?.name}</p>
+        </div>
+        <div className="mb-6 bg-emerald-50 p-6 rounded-3xl border border-emerald-100 text-center">
+          <p className="text-emerald-700 font-bold mb-1">إجمالي المصروفات</p>
+          <p className="text-4xl font-black text-emerald-900">{totalSpent} ريال</p>
+        </div>
+        <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+          <table className="w-full text-right border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-sm">
+                <th className="p-4 border-b">الوصف</th>
+                <th className="p-4 border-b">المبلغ</th>
+                <th className="p-4 border-b">الدافع</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((e, i) => (
+                <tr key={i} className="border-b border-slate-50">
+                  <td className="p-4 font-bold text-slate-800">{e.description}</td>
+                  <td className="p-4 font-bold text-emerald-600">{e.amount} ريال</td>
+                  <td className="p-4 text-slate-500">{e.paidBy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Hidden Prep Tasks Report */}
+      <div 
+        ref={tasksPrintRef} 
+        style={{ position: 'fixed', left: '-10000px', top: 0, width: '210mm', minHeight: '297mm', padding: '20mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000, boxSizing: 'border-box' }}
+        className="rtl"
+        dir="rtl"
+      >
+        <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex justify-between items-end">
+          <h2 className="text-3xl font-black text-emerald-900">مهام تحضير الرحلة</h2>
+          <p className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-xl text-sm font-bold">{activeTrip?.name}</p>
+        </div>
+        <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+          <table className="w-full text-right border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-sm">
+                <th className="p-4 border-b">الحالة</th>
+                <th className="p-4 border-b">المهمة</th>
+                <th className="p-4 border-b">المسؤول</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t, i) => (
+                <tr key={i} className="border-b border-slate-50">
+                  <td className="p-4 text-sm font-bold">
+                    <span className={t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}>
+                      {t.status === 'completed' ? '✅ مكتملة' : '⏳ جارية'}
+                    </span>
+                  </td>
+                  <td className="p-4 font-bold text-slate-800">{t.title}</td>
+                  <td className="p-4 text-slate-500">{t.assignedTo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
