@@ -381,6 +381,8 @@ export default function App() {
       setNewTripMembers(['']);
       setNewTripCommitments({});
     } catch (err) {
+      console.error('Trip Creation Error:', err);
+      alert(`عذراً، فشل إنشاء الرحلة: ${err instanceof Error ? err.message : 'خطأ غير معرف'}`);
       handleFirestoreError(err, OperationType.WRITE, `trips/${tripId}`);
     }
   };
@@ -413,6 +415,7 @@ export default function App() {
       setNewExpenseCategory('other');
       setNewExpensePayer('');
     } catch (err) {
+      alert(`عذراً، فشل حفظ المصروف: ${err instanceof Error ? err.message : 'خطأ غير معرف'}`);
       handleFirestoreError(err, editingExpenseId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/expenses`);
     }
   };
@@ -866,6 +869,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       setNewTaskTitle('');
       setNewTaskAssignee('');
     } catch (err) {
+      alert(`عذراً، فشل حفظ المهمة: ${err instanceof Error ? err.message : 'خطأ غير معرف'}`);
       handleFirestoreError(err, editingTaskId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/tasks`);
     }
   };
@@ -926,6 +930,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       setNewGearName('');
       setNewGearProvider('');
     } catch (err) {
+      alert(`عذراً، فشل حفظ الغرض: ${err instanceof Error ? err.message : 'خطأ غير معرف'}`);
       handleFirestoreError(err, editingGearId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/gear`);
     }
   };
@@ -968,6 +973,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
       setNewEventTime('');
       setNewEventDesc('');
     } catch (err) {
+      alert(`عذراً، فشل حفظ الفعالية: ${err instanceof Error ? err.message : 'خطأ غير معرف'}`);
       handleFirestoreError(err, editingEventId ? OperationType.UPDATE : OperationType.WRITE, `trips/${activeTrip.id}/itinerary`);
     }
   };
