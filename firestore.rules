@@ -54,12 +54,11 @@ service cloud.firestore {
     }
 
     function isValidExpense(data) {
-      return data.keys().hasAll(['description', 'amount', 'paidBy', 'category', 'createdAt']) &&
+      return data.keys().hasAll(['description', 'amount', 'paidBy', 'category', 'updatedAt']) &&
              data.description is string && data.description.size() > 0 &&
-             data.amount is number && data.amount > 0 &&
+             data.amount is number && data.amount >= 0 &&
              data.paidBy is string && data.paidBy.size() > 0 &&
-             data.category in ['food', 'fuel', 'supplies', 'other'] &&
-             data.createdAt == request.time;
+             data.category in ['food', 'fuel', 'supplies', 'other'];
     }
 
     function isValidContribution(data) {
@@ -100,7 +99,7 @@ service cloud.firestore {
       match /tasks/{taskId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && isValidId(taskId) && isValidTask(request.resource.data);
-        allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed']);
+        allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'title', 'assignedTo']);
         allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
       }
 
@@ -108,6 +107,7 @@ service cloud.firestore {
       match /expenses/{expenseId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && isValidId(expenseId) && isValidExpense(request.resource.data);
+        allow update: if isSignedIn() && isValidId(expenseId) && isValidExpense(request.resource.data);
         allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
       }
 
@@ -122,7 +122,7 @@ service cloud.firestore {
       match /gear/{gearId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && isValidId(gearId) && isValidGear(request.resource.data);
-        allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'provider']);
+        allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'provider', 'name']);
         allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
       }
 
@@ -130,7 +130,7 @@ service cloud.firestore {
       match /itinerary/{eventId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && isValidId(eventId) && isValidEvent(request.resource.data);
-        allow update: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
+        allow update: if isSignedIn() && isValidId(eventId) && isValidEvent(request.resource.data);
         allow delete: if isOwner(get(/databases/$(database)/documents/trips/$(tripId)).data);
       }
     }

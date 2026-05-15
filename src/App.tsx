@@ -449,7 +449,7 @@ export default function App() {
 ${pendingTasks.map(t => `• ${t.title} (@${t.assignedTo})`).join('\n')}
 
 نرجو من الجميع التأكد من جاهزية المهام!
-_تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
+_تم الإرسال عبر تطبيق رحلات أبو عقيل_`;
     sendWhatsApp(msg);
   };
 
@@ -666,7 +666,7 @@ _تم الإرسال عبر تطبيق رحلة أبو عقيل_`;
 👥 عدد الأعضاء: ${activeTrip.members.length}
 👤 نصيب الشخص: ${share.toFixed(2)} ريال
 
-_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
     
     await generateGenericImage(reportRef.current, filename, summary);
   };
@@ -677,7 +677,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
     const summary = `📦 *خلاصة مهام الأعضاء - ${activeTrip.name}*
 ${gear.length} مهمة مسجلة.
 
-_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
     await generateGenericImage(gearPrintRef.current, filename, summary);
   };
 
@@ -688,7 +688,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
 إجمالي المصروفات: ${totalSpent} ريال
 عدد المسجل: ${expenses.length} مصروف
 
-_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
     await generateGenericImage(expensesPrintRef.current, filename, summary);
   };
 
@@ -704,7 +704,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
 📢 *تفاصيل القَطية:*
 ${settlements.map(s => `• ${s.from} ⬅️ ${s.to}: ${s.amount} ريال`).join('\n')}
 
-_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
     
     await generateGenericPDF(reportRef.current, filename, summary);
   };
@@ -716,7 +716,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
     const summary = `📦 *قائمة مهام اعضاء الرحلة - ${activeTrip.name}*
 ${gear.map(item => `${item.status === 'available' ? '✅' : '⏳'} ${item.name} (${item.provider || 'الجميع'})`).join('\n')}
 
-_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
 
     await generateGenericPDF(gearPrintRef.current, filename, summary);
   };
@@ -740,7 +740,7 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
     const summary = `📋 *مهام تحضير رحلة ${activeTrip.name}*
 ${tasks.map(t => `${t.status === 'completed' ? '✅' : '⏳'} ${t.title} (@${t.assignedTo})`).join('\n')}
 
-_تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
 
     await generateGenericPDF(tasksPrintRef.current, filename, summary);
   };
@@ -1090,11 +1090,13 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
             </motion.div>
             
             <h1 className="text-6xl md:text-9xl font-display font-black text-white tracking-tighter leading-[0.9] drop-shadow-2xl">
-              رحلة <span className="text-emerald-400 block md:inline underline decoration-amber-400/30 underline-offset-[20px]">أبو عقيل</span>
+              رحلات <span className="text-emerald-400 block md:inline underline decoration-amber-400/30 underline-offset-[20px]">أبو عقيل</span>
             </h1>
             
             <p className="text-lg md:text-2xl text-emerald-50/70 font-medium max-w-xl mx-auto leading-relaxed">
               حوّل فوضى المصاريف إلى متعة. نظّم، وزّع، وتواصل مع أصحابك في مكان واحد وبمنتهى الشفافية والسهولة.
+              <br />
+              <span className="text-amber-400 font-bold block mt-4">كشتتكم غير مع تطبيق "رحلات أبو عقيل"</span>
             </p>
           </div>
 
@@ -1151,7 +1153,12 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
         <div className="max-w-4xl mx-auto px-4 h-18 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {view === 'trip' && <button onClick={() => setView('home')} className="p-3 bg-amber-50 text-amber-600 rounded-2xl hover:bg-amber-100 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
-            <h1 className="text-2xl font-display font-black text-emerald-600 tracking-tight">رحلة <span className="text-slate-800">أبو عقيل</span></h1>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg transform -rotate-3">
+                <Backpack className="text-white w-6 h-6" />
+              </div>
+              <h1 className="text-2xl font-display font-black text-emerald-600 tracking-tight">رحلات <span className="text-slate-800">أبو عقيل</span></h1>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex flex-col items-end text-[10px] uppercase font-bold text-slate-400">
@@ -1678,16 +1685,16 @@ _تم الإنشاء عبر تطبيق رحلة أبو عقيل_`;
                             <span className="text-3xl font-black text-slate-900 tabular-nums">{e.amount.toLocaleString()}</span>
                             <span className="text-[10px] text-slate-400 block font-black uppercase tracking-widest pr-1">ريال</span>
                           </div>
-                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-2">
                             <button 
                               onClick={() => startEditExpense(e)} 
-                              className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                              className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all shadow-sm"
                             >
                               <Pencil className="w-5 h-5" />
                             </button>
                             <button 
                               onClick={() => deleteExpense(e.id)} 
-                              className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                              className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all shadow-sm"
                             >
                               <X className="w-5 h-5" />
                             </button>
