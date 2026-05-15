@@ -692,6 +692,16 @@ _تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
     await generateGenericImage(expensesPrintRef.current, filename, summary);
   };
 
+  const shareTasksAsImage = async () => {
+    if (!activeTrip || tasks.length === 0 || !tasksPrintRef.current) return;
+    const filename = `مهام_تحضير_رحلة_${activeTrip.name}.png`;
+    const summary = `📋 *مهام تحضير رحلة ${activeTrip.name}*
+${tasks.length} مهمة مسجلة.
+
+_تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
+    await generateGenericImage(tasksPrintRef.current, filename, summary);
+  };
+
   const generatePDF = async () => {
     if (!activeTrip || !reportRef.current) return;
     const filename = `تقرير_رحلة_${activeTrip.name.replace(/\s+/g, '_')}.pdf`;
@@ -1638,13 +1648,6 @@ _تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
                     {expenses.length > 0 && (
                       <div className="flex gap-2">
                         <button 
-                          onClick={shareExpensesAsImage} 
-                          disabled={isGeneratingImage}
-                          className="text-amber-600 font-black px-4 py-3 bg-white border border-amber-100 rounded-2xl flex items-center gap-2 hover:bg-amber-50 transition-all shadow-sm disabled:opacity-50"
-                        >
-                          <ImageIcon className="w-5 h-5" />
-                        </button>
-                        <button 
                           onClick={exportExpensesPDF} 
                           disabled={isGeneratingPDF}
                           className="text-emerald-600 font-black px-4 py-3 bg-white border border-emerald-100 rounded-2xl flex items-center gap-2 hover:bg-emerald-50 transition-all shadow-sm"
@@ -1709,6 +1712,23 @@ _تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
                       </div>
                     )}
                   </div>
+
+                  {expenses.length > 0 && (
+                    <div className="pt-4">
+                      <button 
+                        onClick={shareExpensesAsImage} 
+                        disabled={isGeneratingImage}
+                        className={`w-full py-5 flex items-center justify-center gap-3 rounded-[2rem] font-bold transition-all shadow-xl shadow-amber-100 active:scale-95 bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50`}
+                      >
+                        {isGeneratingImage ? (
+                          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <ImageIcon className="w-6 h-6" />
+                        )}
+                        {isGeneratingImage ? 'جاري إنشاء الصورة...' : 'مشاركة سجل المصروفات كصورة'}
+                      </button>
+                    </div>
+                  )}
                 </section>
               </div>
             )}
@@ -1814,6 +1834,23 @@ _تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
                   )}
                 </div>
 
+                {gear.length > 0 && (
+                  <div className="pt-4">
+                    <button 
+                      onClick={shareGearAsImage} 
+                      disabled={isGeneratingImage}
+                      className={`w-full py-5 flex items-center justify-center gap-3 rounded-[2rem] font-bold transition-all shadow-xl shadow-amber-100 active:scale-95 bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50`}
+                    >
+                      {isGeneratingImage ? (
+                        <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-6 h-6" />
+                      )}
+                      {isGeneratingImage ? 'جاري إنشاء الصورة...' : 'مشاركة قائمة الأدوات كصورة للمجموعة'}
+                    </button>
+                  </div>
+                )}
+
                 <section className="space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between border-r-4 border-emerald-600 pr-3 gap-3">
                     <h3 className="text-xl font-bold italic">مهام التحضير</h3>
@@ -1885,39 +1922,58 @@ _تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
                       {pendingTasks.length === 0 && <div className="p-10 text-center text-slate-400 italic">لا توجد مهام معلقة</div>}
                     </div>
 
-                    {completedTasks.length > 0 && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 border-r-4 border-slate-300 pr-3 opacity-60">
-                          <CheckCircle2 className="w-5 h-5 text-slate-400" />
-                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest">مهام مكتملة</h4>
-                        </div>
-                        <div className="glass-card divide-y opacity-70 bg-slate-50/50 overflow-hidden">
-                          <AnimatePresence initial={false}>
-                            {completedTasks.map(t => (
-                              <motion.div 
-                                key={t.id} 
-                                layout
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.9 }}
-                                className="p-4 flex items-center justify-between hover:bg-white/50 transition-colors"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <button 
-                                    onClick={() => toggleTask(t)}
-                                    className="w-8 h-8 rounded-xl flex items-center justify-center transition-all bg-emerald-100 text-emerald-600"
-                                  >
-                                    <CheckCircle2 className="w-5 h-5" />
-                                  </button>
-                                  <div>
-                                    <p className="font-bold line-through text-slate-400">{t.title}</p>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t.assignedTo}</p>
+                    <AnimatePresence initial={false}>
+                      {completedTasks.length > 0 && (
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 border-r-4 border-slate-300 pr-3 opacity-60">
+                            <CheckCircle2 className="w-5 h-5 text-slate-400" />
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest">مهام مكتملة</h4>
+                          </div>
+                          <div className="glass-card divide-y opacity-70 bg-slate-50/50 overflow-hidden">
+                            <AnimatePresence initial={false}>
+                              {completedTasks.map(t => (
+                                <motion.div 
+                                  key={t.id} 
+                                  layout
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.9 }}
+                                  className="p-4 flex items-center justify-between hover:bg-white/50 transition-colors"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <button 
+                                      onClick={() => toggleTask(t)}
+                                      className="w-8 h-8 rounded-xl flex items-center justify-center transition-all bg-emerald-100 text-emerald-600"
+                                    >
+                                      <CheckCircle2 className="w-5 h-5" />
+                                    </button>
+                                    <div>
+                                      <p className="font-bold line-through text-slate-400">{t.title}</p>
+                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t.assignedTo}</p>
+                                    </div>
                                   </div>
-                                </div>
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
+                          </div>
                         </div>
+                      )}
+                    </AnimatePresence>
+
+                    {tasks.length > 0 && (
+                      <div className="pt-8">
+                        <button 
+                          onClick={shareTasksAsImage} 
+                          disabled={isGeneratingImage}
+                          className={`w-full py-5 flex items-center justify-center gap-3 rounded-[2rem] font-bold transition-all shadow-xl shadow-amber-100 active:scale-95 bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50`}
+                        >
+                          {isGeneratingImage ? (
+                            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <ImageIcon className="w-6 h-6" />
+                          )}
+                          {isGeneratingImage ? 'جاري إنشاء الصورة...' : 'مشاركة قائمة المهام كصورة للمجموعة'}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2677,79 +2733,201 @@ _تم الإنشاء عبر تطبيق رحلات أبو عقيل_`;
         </div>
       </div>
 
-      {/* Hidden Expenses Report */}
+      {/* Professional Expenses Report Document (PNG Export) */}
       <div 
         ref={expensesPrintRef} 
         data-print-id="expenses-target"
-        style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
-        className="rtl"
+        style={{ 
+          position: 'fixed',
+          left: '-5000px',
+          top: 0,
+          width: '850px', 
+          backgroundColor: 'white', 
+          color: '#0f172a',
+          zIndex: -1000,
+        }}
+        className="rtl p-14"
         dir="rtl"
       >
-        <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex justify-between items-end">
-          <h2 className="text-3xl font-black text-emerald-900">سجل مصروفات الرحلة</h2>
-          <p className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-xl text-sm font-bold">{activeTrip?.name}</p>
+        {/* Professional Header */}
+        <div className="border-b-[16px] border-emerald-600 pb-10 mb-12 flex justify-between items-start text-right">
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-16 h-16 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                <Wallet className="text-white w-9 h-9" />
+              </div>
+              <div>
+                <h1 className="text-5xl font-black text-emerald-950 tracking-tighter leading-none mb-2">سجل مصروفات الرحلة</h1>
+                <p className="text-slate-400 font-bold tracking-widest text-sm uppercase">Official Expenses Statement</p>
+              </div>
+            </div>
+            <div className="bg-emerald-50 border-2 border-emerald-100 text-emerald-900 px-8 py-4 rounded-[2rem] text-3xl font-black inline-block shadow-lg mt-4">
+              {activeTrip?.name}
+            </div>
+          </div>
+          <div className="text-left space-y-4">
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 shadow-sm text-center min-w-[160px]">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">الرقم المرجعي</p>
+              <p className="font-mono font-black text-xl text-emerald-600">#{activeTrip?.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 shadow-sm text-center min-w-[160px]">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">تاريخ الاستخراج</p>
+              <p className="font-black text-xl text-slate-800">{new Date().toLocaleDateString('ar-SA')}</p>
+            </div>
+          </div>
         </div>
-        <div className="mb-6 bg-emerald-50 p-6 rounded-3xl border border-emerald-100 text-center">
-          <p className="text-emerald-700 font-bold mb-1">إجمالي المصروفات</p>
-          <p className="text-4xl font-black text-emerald-900">{totalSpent} ريال</p>
+
+        {/* Expenses Summary Stat */}
+        <div className="bg-emerald-600 p-10 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden mb-12 text-center">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
+          <p className="text-emerald-100 text-sm font-black uppercase mb-4 tracking-widest">إجمالي المصروفات المسجلة</p>
+          <p className="text-6xl font-black leading-none">{totalSpent.toLocaleString()} <small className="text-2xl font-normal opacity-70">ريال</small></p>
         </div>
-        <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+
+        {/* Expenses Table */}
+        <div className="border-2 border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm bg-white">
           <table className="w-full text-right border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-sm">
-                <th className="p-4 border-b">الوصف</th>
-                <th className="p-4 border-b">المبلغ</th>
-                <th className="p-4 border-b">الدافع</th>
+            <thead className="bg-slate-50 font-sans">
+              <tr>
+                <th className="p-6 text-slate-500 text-xs font-black uppercase tracking-widest border-b">المصروف / المشتريات</th>
+                <th className="p-6 text-center text-slate-500 text-xs font-black uppercase tracking-widest border-b">بواسطة</th>
+                <th className="p-6 text-left text-slate-500 text-xs font-black uppercase tracking-widest border-b">المبلغ</th>
               </tr>
             </thead>
-            <tbody>
-              {expenses.map((e, i) => (
-                <tr key={i} className="border-b border-slate-50">
-                  <td className="p-4 font-bold text-slate-800">{e.description}</td>
-                  <td className="p-4 font-bold text-emerald-600">{e.amount} ريال</td>
-                  <td className="p-4 text-slate-500">{e.paidBy}</td>
+            <tbody className="divide-y divide-slate-50">
+              {expenses.map((e, idx) => (
+                <tr key={idx} className="hover:bg-emerald-50/30 transition-colors">
+                  <td className="p-6">
+                    <div className="flex flex-col">
+                      <span className="font-black text-2xl text-slate-800">{e.description}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{e.category === 'food' ? 'أكل ومواد غذائية' : e.category === 'fuel' ? 'بنزين ومحروقات' : e.category === 'supplies' ? 'تجهيزات وأدوات' : 'أخرى'}</span>
+                    </div>
+                  </td>
+                  <td className="p-6 text-center">
+                    <span className="inline-flex items-center px-4 py-1.5 bg-slate-100 text-slate-700 rounded-full text-xs font-black">
+                      {e.paidBy}
+                    </span>
+                  </td>
+                  <td className="p-6 text-left font-black text-emerald-600 text-3xl tabular-nums">{e.amount.toLocaleString()} <small className="text-xs font-normal">ريال</small></td>
                 </tr>
               ))}
+              {expenses.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="p-16 text-center text-slate-400 font-bold text-lg italic tracking-wide">
+                    لا يوجد مصروفات مسجلة في هذا الكشف.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+
+        {/* Branding Footer */}
+        <div className="mt-24 pt-10 border-t-4 border-slate-100 text-center space-y-4">
+          <p className="text-slate-400 font-bold text-lg">شكراً لاستخدامكم تطبيق "رحلات أبو عقيل" • خويكم في كل درب</p>
+          <div className="flex justify-center items-center gap-6 text-emerald-600/40 text-[9px] font-black uppercase tracking-[0.5em]">
+            <span>SYSTEM AUDIT RECORD</span>
+            <div className="w-1.5 h-1.5 bg-emerald-300 rounded-full" />
+            <span>ID: {activeTrip?.id}</span>
+            <div className="w-1.5 h-1.5 bg-emerald-300 rounded-full" />
+            <span>{new Date().toISOString()}</span>
+          </div>
         </div>
       </div>
 
-      {/* Hidden Prep Tasks Report */}
+      {/* Professional Tasks Report Document (PNG Export) */}
       <div 
         ref={tasksPrintRef} 
         data-print-id="tasks-target"
-        style={{ position: 'fixed', left: '-5000px', top: 0, width: '800px', padding: '15mm', backgroundColor: 'white', color: '#1e293b', zIndex: -1000 }}
-        className="rtl"
+        style={{ 
+          position: 'fixed',
+          left: '-5000px',
+          top: 0,
+          width: '850px', 
+          backgroundColor: 'white', 
+          color: '#0f172a',
+          zIndex: -1000,
+        }}
+        className="rtl p-14"
         dir="rtl"
       >
-        <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex justify-between items-end">
-          <h2 className="text-3xl font-black text-emerald-900">مهام تحضير الرحلة</h2>
-          <p className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-xl text-sm font-bold">{activeTrip?.name}</p>
+        {/* Professional Header */}
+        <div className="border-b-[16px] border-emerald-600 pb-10 mb-12 flex justify-between items-start text-right">
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-16 h-16 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                <CheckCircle2 className="text-white w-9 h-9" />
+              </div>
+              <div>
+                <h1 className="text-5xl font-black text-emerald-950 tracking-tighter leading-none mb-2">مهام تحضير الرحلة</h1>
+                <p className="text-slate-400 font-bold tracking-widest text-sm uppercase">Preparation & Tasks Checklist</p>
+              </div>
+            </div>
+            <div className="bg-emerald-50 border-2 border-emerald-100 text-emerald-900 px-8 py-4 rounded-[2rem] text-3xl font-black inline-block shadow-lg mt-4">
+              {activeTrip?.name}
+            </div>
+          </div>
+          <div className="text-left space-y-4">
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 shadow-sm text-center min-w-[160px]">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">الرقم المرجعي</p>
+              <p className="font-mono font-black text-xl text-emerald-600">#{activeTrip?.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 shadow-sm text-center min-w-[160px]">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">التاريخ</p>
+              <p className="font-black text-xl text-slate-800">{new Date().toLocaleDateString('ar-SA')}</p>
+            </div>
+          </div>
         </div>
-        <div className="rounded-3xl border-2 border-slate-100 overflow-hidden">
+
+        {/* Tasks Summary */}
+        <div className="grid grid-cols-2 gap-8 mb-12">
+          <div className="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl text-center">
+            <p className="text-emerald-100 text-xs font-black uppercase mb-2 tracking-widest">مهام مكتملة</p>
+            <p className="text-4xl font-black">{completedTasks.length}</p>
+          </div>
+          <div className="bg-amber-500 p-8 rounded-[2.5rem] text-white shadow-xl text-center">
+            <p className="text-amber-100 text-xs font-black uppercase mb-2 tracking-widest">مهام معلقة</p>
+            <p className="text-4xl font-black">{pendingTasks.length}</p>
+          </div>
+        </div>
+
+        {/* Tasks Table */}
+        <div className="border-2 border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm bg-white">
           <table className="w-full text-right border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-sm">
-                <th className="p-4 border-b">الحالة</th>
-                <th className="p-4 border-b">المهمة</th>
-                <th className="p-4 border-b">المسؤول</th>
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="p-6 text-slate-500 text-xs font-black uppercase tracking-widest border-b">الحالة</th>
+                <th className="p-6 text-slate-500 text-xs font-black uppercase tracking-widest border-b">المهمة / العمل المطلوب</th>
+                <th className="p-6 text-left text-slate-500 text-xs font-black uppercase tracking-widest border-b">المسؤول</th>
               </tr>
             </thead>
-            <tbody>
-              {tasks.map((t, i) => (
-                <tr key={i} className="border-b border-slate-50">
-                  <td className="p-4 text-sm font-bold">
-                    <span className={t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}>
-                      {t.status === 'completed' ? '✅ مكتملة' : '⏳ جارية'}
+            <tbody className="divide-y divide-slate-50">
+              {[...pendingTasks, ...completedTasks].map((t, idx) => (
+                <tr key={idx} className="hover:bg-emerald-50/30 transition-colors">
+                  <td className="p-6">
+                    <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${t.completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {t.completed ? 'مكتملة ✅' : 'بانتظار الإنجاز ⏳'}
                     </span>
                   </td>
-                  <td className="p-4 font-bold text-slate-800">{t.title}</td>
-                  <td className="p-4 text-slate-500">{t.assignedTo}</td>
+                  <td className="p-6">
+                    <span className={`font-black text-2xl text-slate-800 ${t.completed ? 'line-through opacity-50' : ''}`}>{t.title}</span>
+                  </td>
+                  <td className="p-6 text-left text-slate-500 font-bold text-lg">{t.assignedTo}</td>
                 </tr>
               ))}
+              {tasks.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="p-16 text-center text-slate-400 font-bold text-lg italic tracking-wide">
+                    لا يوجد مهام تحضير مسجلة.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-24 pt-10 border-t-4 border-slate-100 text-center space-y-4">
+          <p className="text-slate-400 font-bold text-lg">نحو رحلة منظمة وممتعة مع "رحلات أبو عقيل"</p>
         </div>
       </div>
     </div>
